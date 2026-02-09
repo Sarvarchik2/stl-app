@@ -109,8 +109,6 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 16),
               _buildBrandsScroll(),
               const SizedBox(height: 32),
-              _buildQuickActions(),
-              const SizedBox(height: 32),
               _buildPromotionalBanner(),
               const SizedBox(height: 32),
               Row(
@@ -227,54 +225,67 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildBrandsScroll() {
     final brands = [
-      {'name': 'BMW', 'logo': '🚗'},
-      {'name': 'Mercedes', 'logo': '🏎'},
-      {'name': 'Audi', 'logo': '🚙'},
-      {'name': 'Toyota', 'logo': '🚕'},
-      {'name': 'Honda', 'logo': '🚐'},
+      {'name': 'BMW', 'icon': Icons.directions_car},
+      {'name': 'Mercedes', 'icon': Icons.star},
+      {'name': 'Audi', 'icon': Icons.auto_awesome},
+      {'name': 'Toyota', 'icon': Icons.local_taxi},
+      {'name': 'Lexus', 'icon': Icons.diamond},
+      {'name': 'BYD', 'icon': Icons.electric_car},
+      {'name': 'Honda', 'icon': Icons.sports_motorsports},
+      {'name': 'Porsche', 'icon': Icons.speed},
+      {'name': 'Tesla', 'icon': Icons.bolt},
+      {'name': 'Hyundai', 'icon': Icons.trending_up},
     ];
 
     return SizedBox(
-      height: 80,
+      height: 100,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: brands.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 16),
+        separatorBuilder: (_, __) => const SizedBox(width: 12),
         itemBuilder: (_, index) {
-          return Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(20)),
-            child: Center(child: Text(brands[index]['logo']!, style: const TextStyle(fontSize: 28))),
+          final brand = brands[index];
+          return GestureDetector(
+            onTap: () {
+              // TODO: Navigate to catalog with brand filter
+            },
+            child: Container(
+              width: 80,
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.white.withOpacity(0.05)),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: AppColors.darkGrey,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(brand['icon'] as IconData, color: AppColors.primary, size: 22),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    brand['name'] as String,
+                    style: const TextStyle(fontSize: 11, color: Colors.white70, fontWeight: FontWeight.w500),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
           );
         },
       ),
     );
   }
 
-  Widget _buildQuickActions() {
-    return Row(
-      children: [
-        Expanded(child: _buildActionCard(AppStrings.get('calculate_cost'), Icons.calculate, Colors.blue)),
-        const SizedBox(width: 16),
-        Expanded(child: _buildActionCard(AppStrings.get('track_delivery'), Icons.local_shipping, Colors.green)),
-      ],
-    );
-  }
 
-  Widget _buildActionCard(String title, IconData icon, Color color) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(24)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: color, size: 32),
-          const SizedBox(height: 16),
-          Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-        ],
-      ),
-    );
-  }
 
   Widget _buildPromotionalBanner() {
     return Container(

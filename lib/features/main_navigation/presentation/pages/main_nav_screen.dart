@@ -13,7 +13,7 @@ class MainNavScreen extends StatefulWidget {
 }
 
 class _MainNavScreenState extends State<MainNavScreen> {
-  int _selectedIndex = 1; // Default to Catalog
+  int _selectedIndex = 0; // Default to Home
 
   final List<Widget> _pages = [
     const HomeScreen(),
