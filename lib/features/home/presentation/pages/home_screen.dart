@@ -1,71 +1,140 @@
 import 'package:flutter/material.dart';
-import '../../../../core/app_colors.dart';
-import '../../../catalog/presentation/pages/car_detail_screen.dart';
+import 'package:stl_app/core/app_colors.dart';
+import 'package:stl_app/core/di/service_locator.dart';
+import 'package:stl_app/features/catalog/data/models/car_model.dart';
+import 'package:stl_app/features/catalog/data/repositories/catalog_repository.dart';
+import 'package:stl_app/features/catalog/presentation/pages/car_detail_screen.dart';
+import 'package:stl_app/features/auth/data/models/user_model.dart';
+import 'package:stl_app/features/auth/data/repositories/auth_repository.dart';
+import 'package:stl_app/core/localization/app_strings.dart';
+import 'package:stl_app/features/home/data/models/story_model.dart';
+import 'package:stl_app/features/home/data/repositories/story_repository.dart';
+import 'package:stl_app/core/utils/url_util.dart';
 import 'story_view_screen.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  final CatalogRepository _catalogRepository = sl<CatalogRepository>();
+  final AuthRepository _authRepository = sl<AuthRepository>();
+  final StoryRepository _storyRepository = sl<StoryRepository>();
+  
+  List<CarModel> _popularCars = [];
+  List<StoryModel> _stories = [];
+  UserModel? _user;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    if (mounted) {
+      setState(() => _isLoading = true);
+    }
+    await Future.wait([
+      _loadPopularCars(),
+      _loadProfile(),
+      _loadStories(),
+    ]);
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _loadProfile() async {
+    try {
+      final user = await _authRepository.getMe();
+      if (mounted) {
+        setState(() => _user = user);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _loadPopularCars() async {
+    try {
+      final cars = await _catalogRepository.getCars();
+      if (mounted) {
+        setState(() {
+          _popularCars = cars.take(5).toList();
+        });
+      }
+    } catch (e) {}
+  }
+
+  Future<void> _loadStories() async {
+    try {
+      final stories = await _storyRepository.getStories();
+      if (mounted) {
+        setState(() {
+          _stories = stories;
+        });
+      }
+    } catch (_) {}
+  }
+
+  String _getLocalized(LocalizedString text) {
+    switch (AppStrings.currentLanguage) {
+      case AppLanguage.uz: return text.uz;
+      case AppLanguage.en: return text.en;
+      case AppLanguage.ru:
+      default: return text.ru;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 120),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        child: RefreshIndicator(
+          onRefresh: _loadData,
+          color: AppColors.primary,
+          child: ListView(
+            key: const PageStorageKey('home_list'),
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 120),
+            physics: const AlwaysScrollableScrollPhysics(),
             children: [
-              // Header
               _buildHeader(),
               const SizedBox(height: 24),
-              
-              // Stories
               _buildStories(context),
               const SizedBox(height: 32),
-              
-              // Removed Welcome Text as requested
-              
-              // Brands Section
-              _buildSectionHeader('Популярные бренды'),
+              _buildSectionHeader(AppStrings.get('brands')),
               const SizedBox(height: 16),
               _buildBrandsScroll(),
               const SizedBox(height: 32),
-              
-              // Main Actions / Categories
               _buildQuickActions(),
               const SizedBox(height: 32),
-              
-              // News / Banner
               _buildPromotionalBanner(),
               const SizedBox(height: 32),
-              
-              // Recent Cars / Popular
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    'Спецпредложения',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  Text(
+                    AppStrings.get('special_offers'),
+                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                   TextButton(
                     onPressed: () {},
-                    child: const Text('Смотреть все', style: TextStyle(color: AppColors.primary)),
+                    child: Text(AppStrings.get('all'), style: const TextStyle(color: AppColors.primary)),
                   ),
                 ],
               ),
               const SizedBox(height: 16),
-              _buildPopularCars(context),
+              if (_popularCars.isEmpty && _isLoading)
+                const Center(child: CircularProgressIndicator(color: AppColors.primary))
+              else
+                ..._popularCars.map((car) => _buildPopularCarItem(car)),
             ],
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildSectionHeader(String title) {
-    return Text(
-      title,
-      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
     );
   }
 
@@ -75,24 +144,15 @@ class HomeScreen extends StatelessWidget {
         Container(
           width: 50,
           height: 50,
-          decoration: const BoxDecoration(
-            color: AppColors.primary,
-            shape: BoxShape.circle,
-          ),
+          decoration: const BoxDecoration(color: AppColors.primary, shape: BoxShape.circle),
           child: const Icon(Icons.person, color: Colors.white),
         ),
         const SizedBox(width: 12),
-        const Column(
+        Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'STL LOGISTICS',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-            ),
-            Text(
-              'ID: 9981312314',
-              style: TextStyle(color: AppColors.grey, fontSize: 14),
-            ),
+            Text(_user?.fullName ?? 'STL LOGISTICS', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            Text(_user?.phone ?? '', style: const TextStyle(color: AppColors.grey, fontSize: 14)),
           ],
         ),
         const Spacer(),
@@ -102,91 +162,60 @@ class HomeScreen extends StatelessWidget {
   }
 
   Widget _buildNotificationIcon() {
-    return Stack(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(15),
-          ),
-          child: const Icon(Icons.notifications_none_rounded, color: Colors.white),
-        ),
-        Positioned(
-          right: 0,
-          top: 0,
-          child: Container(
-            padding: const EdgeInsets.all(4),
-            decoration: const BoxDecoration(
-              color: Colors.red,
-              shape: BoxShape.circle,
-            ),
-            child: const Text('3', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white)),
-          ),
-        ),
-      ],
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(color: AppColors.surface, shape: BoxShape.circle),
+      child: const Icon(Icons.notifications_none, size: 24),
     );
   }
 
-  Widget _buildStories(BuildContext context) {
-    final List<Map<String, String>> stories = [
-      {'label': 'Важно', 'color': '0xFFFF6B00'},
-      {'label': 'О нас', 'color': '0xFF2C2C2E'},
-      {'label': 'Доставка', 'color': '0xFF2C2C2E'},
-      {'label': 'Отзывы', 'color': '0xFF2C2C2E'},
-      {'label': 'Гарантия', 'color': '0xFF2C2C2E'},
-    ];
+  Widget _buildSectionHeader(String title) {
+    return Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold));
+  }
 
+  Widget _buildStories(BuildContext context) {
+    if (_stories.isEmpty && !_isLoading) return const SizedBox.shrink();
     return SizedBox(
       height: 90,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        itemCount: stories.length,
-        separatorBuilder: (context, index) => const SizedBox(width: 16),
+        itemCount: _isLoading ? 4 : _stories.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 16),
         itemBuilder: (context, index) {
+          if (_isLoading) {
+            return Container(width: 60, height: 60, decoration: BoxDecoration(shape: BoxShape.circle, color: AppColors.surface));
+          }
+          final story = _stories[index];
           return GestureDetector(
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => StoryViewScreen(
-                    title: stories[index]['label']!,
-                    initialIndex: index,
-                  ),
-                ),
-              );
-            },
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => StoryViewScreen(story: story))),
             child: Column(
               children: [
                 Container(
-                  width: 64,
-                  height: 64,
-                  padding: const EdgeInsets.all(3),
+                  width: 60,
+                  height: 60,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    gradient: LinearGradient(
-                      colors: index == 0 
-                        ? [AppColors.primary, Colors.orangeAccent] 
-                        : [AppColors.darkGrey, AppColors.darkGrey],
-                    ),
+                    gradient: LinearGradient(colors: [Colors.orange, AppColors.primary]),
+                    border: Border.all(color: Colors.transparent, width: 2),
                   ),
-                  child: Container(
-                    decoration: const BoxDecoration(
-                      color: Colors.black,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Center(
-                      child: Icon(
-                        index == 0 ? Icons.star_rounded : Icons.play_circle_outline,
-                        color: index == 0 ? AppColors.primary : AppColors.grey,
+                  padding: const EdgeInsets.all(2),
+                  child: ClipOval(
+                    child: Image.network(
+                      UrlUtil.sanitize(story.previewImage),
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        color: AppColors.surface,
+                        child: const Icon(Icons.star, color: AppColors.primary, size: 24),
                       ),
                     ),
                   ),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 8),
                 Text(
-                  stories[index]['label']!,
-                  style: TextStyle(fontSize: 12, color: index == 0 ? Colors.white : AppColors.grey),
+                  _getLocalized(story.title),
+                  style: const TextStyle(fontSize: 11, color: Colors.white70),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
@@ -197,25 +226,25 @@ class HomeScreen extends StatelessWidget {
   }
 
   Widget _buildBrandsScroll() {
-    final List<String> brands = ['Tesla', 'Ford', 'Chevrolet', 'Jeep', 'Cadillac', 'Dodge'];
+    final brands = [
+      {'name': 'BMW', 'logo': '🚗'},
+      {'name': 'Mercedes', 'logo': '🏎'},
+      {'name': 'Audi', 'logo': '🚙'},
+      {'name': 'Toyota', 'logo': '🚕'},
+      {'name': 'Honda', 'logo': '🚐'},
+    ];
+
     return SizedBox(
-      height: 44,
+      height: 80,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: brands.length,
-        separatorBuilder: (context, index) => const SizedBox(width: 12),
-        itemBuilder: (context, index) {
+        separatorBuilder: (_, __) => const SizedBox(width: 16),
+        itemBuilder: (_, index) {
           return Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(color: Colors.white.withOpacity(0.05)),
-            ),
-            child: Text(
-              brands[index],
-              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-            ),
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(20)),
+            child: Center(child: Text(brands[index]['logo']!, style: const TextStyle(fontSize: 28))),
           );
         },
       ),
@@ -225,33 +254,24 @@ class HomeScreen extends StatelessWidget {
   Widget _buildQuickActions() {
     return Row(
       children: [
-        _buildActionItem(Icons.calculate_outlined, 'Расчет'),
-        const SizedBox(width: 12),
-        _buildActionItem(Icons.headset_mic_outlined, 'Помощь'),
-        const SizedBox(width: 12),
-        _buildActionItem(Icons.location_on_outlined, 'Трекинг'),
+        Expanded(child: _buildActionCard(AppStrings.get('calculate_cost'), Icons.calculate, Colors.blue)),
+        const SizedBox(width: 16),
+        Expanded(child: _buildActionCard(AppStrings.get('track_delivery'), Icons.local_shipping, Colors.green)),
       ],
     );
   }
 
-  Widget _buildActionItem(IconData icon, String label) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 20),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, color: AppColors.primary, size: 28),
-            const SizedBox(height: 10),
-            Text(
-              label,
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
+  Widget _buildActionCard(String title, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(24)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color, size: 32),
+          const SizedBox(height: 16),
+          Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        ],
       ),
     );
   }
@@ -260,107 +280,56 @@ class HomeScreen extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        image: const DecorationImage(
-          image: NetworkImage('https://images.unsplash.com/photo-1552519507-da3b142c6e3d?auto=format&fit=crop&w=800&q=80'),
-          fit: BoxFit.cover,
-          colorFilter: ColorFilter.mode(Colors.black54, BlendMode.darken),
-        ),
-      ),
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(24), gradient: LinearGradient(colors: [AppColors.primary, AppColors.primary.withOpacity(0.7)])),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Авто из США под ключ',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
-          ),
+          const Text('STL Logistics & Auto', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
           const SizedBox(height: 8),
-          const Text(
-            'Прямые аукционы и быстрая логистика',
-            style: TextStyle(color: Colors.white70),
-          ),
+          const Text('Прямые аукционы и быстрая логистика', style: TextStyle(color: Colors.white70)),
           const SizedBox(height: 16),
           ElevatedButton(
             onPressed: () {},
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              minimumSize: const Size(120, 36),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            child: const Text('Подробнее', style: TextStyle(fontSize: 12)),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: AppColors.primary, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+            child: Text(AppStrings.get('details')),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildPopularCars(BuildContext context) {
-    return SizedBox(
-      height: 240,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        children: [
-          _buildCarCard(
-            context,
-            'Tesla Model S', 
-            '140 800 000 сум', 
-            'https://images.unsplash.com/photo-1560958089-b8a1929cea89?auto=format&fit=crop&w=400&q=80',
-          ),
-          const SizedBox(width: 16),
-          _buildCarCard(
-            context,
-            'Ford Mustang', 
-            '158 400 000 сум', 
-            'https://images.unsplash.com/photo-1584345604476-8ec5e12e42dd?auto=format&fit=crop&w=400&q=80',
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCarCard(BuildContext context, String name, String price, String imageUrl) {
+  Widget _buildPopularCarItem(CarModel car) {
+    final heroTag = 'home_car_${car.id}';
     return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => CarDetailScreen(name: name, price: price, imageUrl: imageUrl),
-          ),
-        );
-      },
+      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => CarDetailScreen(car: car, heroTag: heroTag))),
       child: Container(
-        width: 200,
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(24),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(20)),
+        child: Row(
           children: [
-            Hero(
-              tag: name,
-              child: ClipRRect(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-                child: Image.network(
-                  imageUrl,
-                  height: 140,
-                  width: 200,
-                  fit: BoxFit.cover,
-                ),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Image.network(
+                car.photos.isNotEmpty ? UrlUtil.sanitize(car.photos[0]) : '',
+                width: 100, height: 100, fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Container(width: 100, height: 100, color: AppColors.darkGrey, child: const Icon(Icons.directions_car, color: AppColors.grey)),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.all(16),
+            const SizedBox(width: 16),
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  Text('${car.brand} ${car.model}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                   const SizedBox(height: 4),
-                  Text(price, style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
+                  Text('${car.year} • ${car.engine ?? ""}', style: const TextStyle(color: AppColors.grey, fontSize: 13)),
+                  const SizedBox(height: 8),
+                  Text('\$${car.finalPriceUsd}', style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 18)),
                 ],
               ),
             ),
+            const Icon(Icons.chevron_right, color: AppColors.grey),
           ],
         ),
       ),

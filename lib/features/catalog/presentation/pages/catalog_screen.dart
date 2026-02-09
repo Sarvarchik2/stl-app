@@ -1,5 +1,12 @@
 import 'package:flutter/material.dart';
-import '../../../../core/app_colors.dart';
+import 'package:stl_app/core/app_colors.dart';
+import 'package:stl_app/core/di/service_locator.dart';
+import 'package:stl_app/features/catalog/data/models/car_model.dart';
+import 'package:stl_app/features/catalog/data/repositories/catalog_repository.dart';
+import 'package:stl_app/features/auth/data/models/user_model.dart';
+import 'package:stl_app/features/auth/data/repositories/auth_repository.dart';
+import 'package:stl_app/core/localization/app_strings.dart';
+import 'package:stl_app/core/utils/url_util.dart';
 import 'car_detail_screen.dart';
 
 class CatalogScreen extends StatefulWidget {
@@ -9,327 +16,541 @@ class CatalogScreen extends StatefulWidget {
   State<CatalogScreen> createState() => _CatalogScreenState();
 }
 
-class _CatalogScreenState extends State<CatalogScreen> {
+class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProviderStateMixin {
   final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
+  final CatalogRepository _catalogRepository = sl<CatalogRepository>();
+  final AuthRepository _authRepository = sl<AuthRepository>();
+  
+  List<CarModel> _cars = [];
+  List<CarModel> _filteredCars = [];
+  UserModel? _user;
+  bool _isLoading = true;
+  bool _isSearching = false;
+  String? _error;
+  
+  // Filters
+  String? _selectedBrand;
+  String? _selectedBodyType;
+  RangeValues _priceRange = const RangeValues(0, 100000);
+  
+  late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
+
+  final List<String> _brands = ['BMW', 'Mercedes', 'Audi', 'Toyota', 'Honda', 'BYD', 'Lexus', 'Porsche'];
+  final List<String> _bodyTypes = ['Седан', 'Кроссовер', 'Хэтчбек', 'Универсал', 'Купе', 'Минивэн'];
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+    _fadeAnimation = CurvedAnimation(parent: _animationController, curve: Curves.easeInOut);
+    _loadData();
+    _searchController.addListener(_onSearchChanged);
+  }
+
+  @override
+  void dispose() {
+    _searchController.removeListener(_onSearchChanged);
+    _searchController.dispose();
+    _searchFocusNode.dispose();
+    _animationController.dispose();
+    super.dispose();
+  }
+
+  void _onSearchChanged() {
+    _filterCars();
+  }
+
+  Future<void> _loadData() async {
+    _loadProfile();
+    await _loadCars();
+  }
+
+  Future<void> _loadProfile() async {
+    try {
+      final user = await _authRepository.getMe();
+      if (mounted) setState(() => _user = user);
+    } catch (_) {}
+  }
+
+  Future<void> _loadCars() async {
+    if (mounted) setState(() { _isLoading = true; _error = null; });
+    try {
+      final cars = await _catalogRepository.getCars();
+      if (mounted) {
+        setState(() { 
+          _cars = cars; 
+          _filteredCars = cars;
+          _isLoading = false; 
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() { _error = e.toString(); _isLoading = false; });
+    }
+  }
+
+  void _filterCars() {
+    final query = _searchController.text.toLowerCase().trim();
+    
+    setState(() {
+      _filteredCars = _cars.where((car) {
+        // Search filter
+        final matchesSearch = query.isEmpty ||
+            car.brand.toLowerCase().contains(query) ||
+            car.model.toLowerCase().contains(query) ||
+            (car.engine?.toLowerCase().contains(query) ?? false);
+        
+        // Brand filter
+        final matchesBrand = _selectedBrand == null || 
+            car.brand.toLowerCase() == _selectedBrand!.toLowerCase();
+        
+        // Body type filter
+        final matchesBodyType = _selectedBodyType == null || 
+            (car.bodyType?.toLowerCase() == _selectedBodyType!.toLowerCase());
+        
+        // Price filter
+        final price = double.tryParse(car.finalPriceUsd ?? '0') ?? 0;
+        final matchesPrice = price >= _priceRange.start && price <= _priceRange.end;
+        
+        return matchesSearch && matchesBrand && matchesBodyType && matchesPrice;
+      }).toList();
+    });
+  }
 
   void _showFilterSheet() {
     showModalBottomSheet(
       context: context,
+      backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      backgroundColor: AppColors.background,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-      ),
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.7,
-        minChildSize: 0.5,
-        maxChildSize: 0.95,
-        expand: false,
-        builder: (context, scrollController) => SingleChildScrollView(
-          controller: scrollController,
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: AppColors.darkGrey,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-              const Text('Фильтры', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 32),
-              
-              const Text('Марка авто', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 16),
-              _buildFilterChips(['Tesla', 'Ford', 'Jeep', 'Dodge', 'Cadillac', 'Chevrolet']),
-              
-              const SizedBox(height: 32),
-              const Text('Тип кузова', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 16),
-              _buildFilterChips(['Седан', 'Внедорожник', 'Купе', 'Пикап', 'Минивэн']),
-              
-              const SizedBox(height: 32),
-              const Text('Цена (сум)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 16),
-              RangeSlider(
-                values: const RangeValues(20000000, 150000000),
-                min: 0,
-                max: 200000000,
-                activeColor: AppColors.primary,
-                inactiveColor: AppColors.darkGrey,
-                onChanged: (values) {},
-              ),
-              const Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('от 20 млн', style: TextStyle(color: AppColors.grey)),
-                  Text('до 150+ млн', style: TextStyle(color: AppColors.grey)),
-                ],
-              ),
-              
-              const SizedBox(height: 48),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    padding: const EdgeInsets.symmetric(vertical: 18),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  ),
-                  child: const Text('Применить', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+      builder: (context) => _buildFilterSheet(),
     );
   }
 
-  Widget _buildFilterChips(List<String> labels) {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 12,
-      children: labels.map((label) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.darkGrey),
-        ),
-        child: Text(label, style: const TextStyle(fontSize: 14)),
-      )).toList(),
-    );
+  void _clearFilters() {
+    setState(() {
+      _selectedBrand = null;
+      _selectedBodyType = null;
+      _priceRange = const RangeValues(0, 100000);
+      _searchController.clear();
+      _filteredCars = _cars;
+    });
   }
+
+  bool get _hasActiveFilters => 
+      _selectedBrand != null || 
+      _selectedBodyType != null || 
+      _priceRange.start > 0 || 
+      _priceRange.end < 100000;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.background,
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 120),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildHeader(),
-              const SizedBox(height: 24),
-              
-              // Improved Search Bar
-              Row(
-                children: [
-                  Expanded(
-                    child: Container(
-                      height: 56,
-                      decoration: BoxDecoration(
-                        color: AppColors.surface,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.white10),
-                      ),
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: TextField(
-                        controller: _searchController,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: const InputDecoration(
-                          hintText: 'Поиск (например: Tesla Model S)',
-                          hintStyle: TextStyle(color: AppColors.grey),
-                          icon: Icon(Icons.search, color: AppColors.primary),
-                          border: InputBorder.none,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  GestureDetector(
-                    onTap: _showFilterSheet,
-                    child: Container(
-                      width: 56,
-                      height: 56,
-                      decoration: BoxDecoration(
-                        color: AppColors.primary,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.primary.withOpacity(0.3),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          )
-                        ],
-                      ),
-                      child: const Icon(Icons.tune_rounded, color: Colors.white),
-                    ),
-                  ),
-                ],
+        child: Column(
+          children: [
+            // Header with Search
+            _buildHeader(),
+            
+            // Content
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: _loadCars,
+                color: AppColors.primary,
+                child: _isLoading
+                    ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+                    : _error != null
+                        ? _buildErrorState()
+                        : _filteredCars.isEmpty
+                            ? _buildEmptyState()
+                            : _buildCarsList(),
               ),
-              const SizedBox(height: 32),
-              
-              // Selection Title
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Найдено: 128 авто',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  TextButton.icon(
-                    onPressed: () {},
-                    icon: const Icon(Icons.sort, size: 18, color: AppColors.primary),
-                    label: const Text('Сортировка', style: TextStyle(color: AppColors.primary)),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              
-              // USA Car List
-              _buildCarItem(
-                context, 
-                'Tesla Model 3 Performance', 
-                '142 000 000 сум', 
-                'https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&w=800&q=80',
-                ['2022', 'Электро', 'АВТОПИЛОТ'],
-              ),
-              const SizedBox(height: 20),
-              _buildCarItem(
-                context, 
-                'Ford Mustang GT', 
-                '158 500 000 сум', 
-                'https://images.unsplash.com/photo-1584345604476-8ec5e12e42dd?auto=format&fit=crop&w=800&q=80',
-                ['2023', 'Бензин', '5.0L'],
-              ),
-              const SizedBox(height: 20),
-              _buildCarItem(
-                context, 
-                'Chevrolet Corvette C8', 
-                '240 000 000 сум', 
-                'https://images.unsplash.com/photo-1552519507-da3b142c6e3d?auto=format&fit=crop&w=800&q=80',
-                ['2021', 'Бензин', 'СПОРТ'],
-              ),
-              const SizedBox(height: 20),
-              _buildCarItem(
-                context, 
-                'Jeep Wrangler Rubicon', 
-                '135 000 000 сум', 
-                'https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&w=800&q=80', // Replace with jeep later
-                ['2022', '4x4', 'ВНЕДОРОЖНИК'],
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 
   Widget _buildHeader() {
-    return Row(
-      children: [
-        Container(
-          width: 50,
-          height: 50,
-          decoration: const BoxDecoration(
-            color: AppColors.primary,
-            shape: BoxShape.circle,
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
           ),
-          child: const Icon(Icons.person, color: Colors.white),
-        ),
-        const SizedBox(width: 12),
-        const Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'STL LOGISTICS',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-            ),
-            Text(
-              'Авто из США • Аукционы',
-              style: TextStyle(color: AppColors.primary, fontSize: 13, fontWeight: FontWeight.w500),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Title row
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    AppStrings.get('catalog'),
+                    style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${_filteredCars.length} автомобилей',
+                    style: const TextStyle(color: AppColors.grey, fontSize: 14),
+                  ),
+                ],
+              ),
+              Row(
+                children: [
+                  if (_hasActiveFilters)
+                    GestureDetector(
+                      onTap: _clearFilters,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.red.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.close, size: 16, color: Colors.red),
+                            SizedBox(width: 4),
+                            Text('Сброс', style: TextStyle(color: Colors.red, fontSize: 12)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  const SizedBox(width: 8),
+                  _buildNotificationIcon(),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          
+          // Search Bar
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: _searchFocusNode.hasFocus 
+                          ? AppColors.primary 
+                          : Colors.transparent,
+                      width: 2,
+                    ),
+                  ),
+                  child: TextField(
+                    controller: _searchController,
+                    focusNode: _searchFocusNode,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      hintText: 'Поиск по марке, модели...',
+                      hintStyle: TextStyle(color: AppColors.grey.withOpacity(0.7)),
+                      prefixIcon: const Icon(Icons.search, color: AppColors.grey),
+                      suffixIcon: _searchController.text.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear, color: AppColors.grey, size: 20),
+                              onPressed: () {
+                                _searchController.clear();
+                                _searchFocusNode.unfocus();
+                              },
+                            )
+                          : null,
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    ),
+                    onTap: () => setState(() {}),
+                    onEditingComplete: () {
+                      _searchFocusNode.unfocus();
+                      setState(() {});
+                    },
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              GestureDetector(
+                onTap: _showFilterSheet,
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [AppColors.primary, AppColors.primary.withOpacity(0.8)],
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primary.withOpacity(0.3),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Stack(
+                    children: [
+                      const Icon(Icons.tune_rounded, color: Colors.white),
+                      if (_hasActiveFilters)
+                        Positioned(
+                          right: -2,
+                          top: -2,
+                          child: Container(
+                            width: 10,
+                            height: 10,
+                            decoration: const BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          
+          // Quick Filters
+          if (!_isLoading && _cars.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            SizedBox(
+              height: 36,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: [
+                  _buildQuickFilterChip('Все', _selectedBrand == null && _selectedBodyType == null, () {
+                    setState(() {
+                      _selectedBrand = null;
+                      _selectedBodyType = null;
+                    });
+                    _filterCars();
+                  }),
+                  const SizedBox(width: 8),
+                  ..._brands.take(5).map((brand) => Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: _buildQuickFilterChip(brand, _selectedBrand == brand, () {
+                      setState(() => _selectedBrand = _selectedBrand == brand ? null : brand);
+                      _filterCars();
+                    }),
+                  )),
+                ],
+              ),
             ),
           ],
-        ),
-        const Spacer(),
-        _buildNotificationButton(),
-      ],
+        ],
+      ),
     );
   }
 
-  Widget _buildNotificationButton() {
+  Widget _buildQuickFilterChip(String label, bool isSelected, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.primary : AppColors.surface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? AppColors.primary : Colors.white.withOpacity(0.1),
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.white : AppColors.grey,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            fontSize: 13,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNotificationIcon() {
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
+        shape: BoxShape.circle,
       ),
-      child: const Icon(Icons.notifications_none_rounded, color: Colors.white),
+      child: const Icon(Icons.notifications_none, size: 22, color: Colors.white),
     );
   }
 
-  Widget _buildCarItem(BuildContext context, String name, String price, String imageUrl, List<String> tags) {
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => CarDetailScreen(name: name, price: price, imageUrl: imageUrl),
-          ),
+  Widget _buildErrorState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.error_outline, size: 64, color: Colors.red.withOpacity(0.5)),
+            const SizedBox(height: 16),
+            const Text('Ошибка загрузки', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            Text(_error ?? '', style: const TextStyle(color: AppColors.grey), textAlign: TextAlign.center),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: _loadCars,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: const Text('Повторить'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.search_off_rounded, size: 48, color: AppColors.grey.withOpacity(0.5)),
+            ),
+            const SizedBox(height: 24),
+            const Text('Ничего не найдено', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            const Text(
+              'Попробуйте изменить параметры поиска\nили сбросить фильтры',
+              style: TextStyle(color: AppColors.grey),
+              textAlign: TextAlign.center,
+            ),
+            if (_hasActiveFilters) ...[
+              const SizedBox(height: 24),
+              TextButton.icon(
+                onPressed: _clearFilters,
+                icon: const Icon(Icons.refresh, color: AppColors.primary),
+                label: const Text('Сбросить фильтры', style: TextStyle(color: AppColors.primary)),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCarsList() {
+    return ListView.builder(
+      key: const PageStorageKey('catalog_list'),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 120),
+      itemCount: _filteredCars.length,
+      itemBuilder: (context, index) {
+        final car = _filteredCars[index];
+        return TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0, end: 1),
+          duration: Duration(milliseconds: 300 + (index * 50)),
+          curve: Curves.easeOut,
+          builder: (context, value, child) {
+            return Transform.translate(
+              offset: Offset(0, 20 * (1 - value)),
+              child: Opacity(opacity: value, child: child),
+            );
+          },
+          child: _buildCarCard(car),
         );
       },
+    );
+  }
+
+  Widget _buildCarCard(CarModel car) {
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context, 
+        MaterialPageRoute(builder: (context) => CarDetailScreen(car: car, heroTag: 'car_${car.id}')),
+      ),
       child: Container(
+        margin: const EdgeInsets.only(bottom: 20),
         decoration: BoxDecoration(
           color: AppColors.surface,
           borderRadius: BorderRadius.circular(24),
           border: Border.all(color: Colors.white.withOpacity(0.05)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.2),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Image with Badge
+            // Image
             Stack(
               children: [
                 ClipRRect(
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-                  child: Hero(
-                    tag: name,
-                    child: Image.network(
-                      imageUrl,
+                  child: Image.network(
+                    car.photos.isNotEmpty ? UrlUtil.sanitize(car.photos[0]) : '',
+                    height: 200,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
                       height: 200,
                       width: double.infinity,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) => Container(
-                        height: 200,
-                        color: AppColors.darkGrey,
-                        child: const Icon(Icons.image_not_supported, color: AppColors.grey),
-                      ),
+                      color: AppColors.darkGrey,
+                      child: const Icon(Icons.directions_car, size: 64, color: AppColors.grey),
                     ),
                   ),
                 ),
+                // Year badge
+                Positioned(
+                  top: 16,
+                  left: 16,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      car.year.toString(),
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                    ),
+                  ),
+                ),
+                // Favorite button
                 Positioned(
                   top: 16,
                   right: 16,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.7),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.white24),
+                      color: Colors.black.withOpacity(0.5),
+                      shape: BoxShape.circle,
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: const [
-                        Icon(Icons.stars, color: Colors.amber, size: 14),
-                        SizedBox(width: 4),
-                        Text('ТОП ВЫБОР', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-                      ],
-                    ),
+                    child: const Icon(Icons.favorite_border, color: Colors.white, size: 20),
                   ),
                 ),
               ],
             ),
             
+            // Info
             Padding(
               padding: const EdgeInsets.all(20),
               child: Column(
@@ -337,64 +558,60 @@ class _CatalogScreenState extends State<CatalogScreen> {
                 children: [
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Expanded(
-                        child: Text(
-                          name,
-                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${car.brand} ${car.model}',
+                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Icon(Icons.location_on_outlined, size: 14, color: AppColors.grey.withOpacity(0.7)),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'США, Аукцион',
+                                  style: TextStyle(color: AppColors.grey.withOpacity(0.7), fontSize: 12),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
-                      ),
-                      const Icon(Icons.favorite_border, color: AppColors.grey, size: 24),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  
-                  // Tags Row
-                  Wrap(
-                    spacing: 8,
-                    children: tags.map((tag) => Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: AppColors.darkGrey,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        tag,
-                        style: const TextStyle(color: AppColors.grey, fontSize: 11, fontWeight: FontWeight.w600),
-                      ),
-                    )).toList(),
-                  ),
-                  
-                  const SizedBox(height: 20),
-                  
-                  // Price and Button
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Цена под ключ:', style: TextStyle(color: AppColors.grey, fontSize: 12)),
-                          const SizedBox(height: 4),
-                          Text(
-                            price,
-                            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.primary),
-                          ),
-                        ],
                       ),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         decoration: BoxDecoration(
-                          color: AppColors.primary,
-                          borderRadius: BorderRadius.circular(14),
+                          color: AppColors.primary.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        child: const Text(
-                          'Подробнее',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                        child: Text(
+                          '\$${car.finalPriceUsd}',
+                          style: const TextStyle(
+                            color: AppColors.primary,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  
+                  // Tags
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      if (car.engine != null) _buildTag(Icons.speed, car.engine!),
+                      if (car.transmission != null) _buildTag(Icons.settings, car.transmission!),
+                      if (car.drivetrain != null) _buildTag(Icons.all_inclusive, car.drivetrain!),
+                      if (car.mileage != null) _buildTag(Icons.route, '${car.mileage} mi'),
                     ],
                   ),
                 ],
@@ -403,6 +620,199 @@ class _CatalogScreenState extends State<CatalogScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildTag(IconData icon, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppColors.darkGrey,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: AppColors.grey),
+          const SizedBox(width: 4),
+          Text(label, style: const TextStyle(color: AppColors.grey, fontSize: 11)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterSheet() {
+    return StatefulBuilder(
+      builder: (context, setSheetState) {
+        return Container(
+          height: MediaQuery.of(context).size.height * 0.75,
+          decoration: const BoxDecoration(
+            color: AppColors.background,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+          ),
+          child: Column(
+            children: [
+              // Handle
+              Container(
+                margin: const EdgeInsets.only(top: 12),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              
+              // Header
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Фильтры', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                    TextButton(
+                      onPressed: () {
+                        setSheetState(() {
+                          _selectedBrand = null;
+                          _selectedBodyType = null;
+                          _priceRange = const RangeValues(0, 100000);
+                        });
+                      },
+                      child: const Text('Сбросить', style: TextStyle(color: AppColors.primary)),
+                    ),
+                  ],
+                ),
+              ),
+              
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  children: [
+                    // Brand
+                    const Text('Марка', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _brands.map((brand) {
+                        final isSelected = _selectedBrand == brand;
+                        return GestureDetector(
+                          onTap: () => setSheetState(() => _selectedBrand = isSelected ? null : brand),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: isSelected ? AppColors.primary : AppColors.surface,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: isSelected ? AppColors.primary : Colors.white10),
+                            ),
+                            child: Text(
+                              brand,
+                              style: TextStyle(
+                                color: isSelected ? Colors.white : Colors.white70,
+                                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    
+                    const SizedBox(height: 28),
+                    
+                    // Body Type
+                    const Text('Тип кузова', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _bodyTypes.map((type) {
+                        final isSelected = _selectedBodyType == type;
+                        return GestureDetector(
+                          onTap: () => setSheetState(() => _selectedBodyType = isSelected ? null : type),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: isSelected ? AppColors.primary : AppColors.surface,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: isSelected ? AppColors.primary : Colors.white10),
+                            ),
+                            child: Text(
+                              type,
+                              style: TextStyle(
+                                color: isSelected ? Colors.white : Colors.white70,
+                                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    
+                    const SizedBox(height: 28),
+                    
+                    // Price Range
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Цена', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                        Text(
+                          '\$${_priceRange.start.round()} - \$${_priceRange.end.round()}',
+                          style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    SliderTheme(
+                      data: SliderThemeData(
+                        activeTrackColor: AppColors.primary,
+                        inactiveTrackColor: AppColors.surface,
+                        thumbColor: AppColors.primary,
+                        overlayColor: AppColors.primary.withOpacity(0.2),
+                        rangeThumbShape: const RoundRangeSliderThumbShape(enabledThumbRadius: 10),
+                      ),
+                      child: RangeSlider(
+                        values: _priceRange,
+                        min: 0,
+                        max: 100000,
+                        divisions: 100,
+                        onChanged: (values) => setSheetState(() => _priceRange = values),
+                      ),
+                    ),
+                    
+                    const SizedBox(height: 40),
+                  ],
+                ),
+              ),
+              
+              // Apply Button
+              SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        setState(() {});
+                        _filterCars();
+                        Navigator.pop(context);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      ),
+                      child: const Text(
+                        'Применить фильтры',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

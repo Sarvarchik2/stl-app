@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:stl_app/core/di/service_locator.dart';
+import 'package:stl_app/features/auth/data/repositories/auth_repository.dart';
+import 'package:stl_app/features/main_navigation/presentation/pages/main_nav_screen.dart';
 import 'login_screen.dart';
-import '../../../../core/app_colors.dart';
+import 'package:stl_app/core/app_colors.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -13,15 +16,23 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    _navigateToLogin();
+    _checkAuth();
   }
 
-  Future<void> _navigateToLogin() async {
+  Future<void> _checkAuth() async {
     await Future.delayed(const Duration(seconds: 2));
     if (!mounted) return;
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (context) => const LoginScreen()),
-    );
+    
+    final authRepository = sl<AuthRepository>();
+    if (authRepository.isLoggedIn) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (context) => const MainNavScreen()),
+      );
+    } else {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+      );
+    }
   }
 
   @override

@@ -13,7 +13,7 @@ class MainNavScreen extends StatefulWidget {
 }
 
 class _MainNavScreenState extends State<MainNavScreen> {
-  int _selectedIndex = 1; // Default to Catalog as per Image 2
+  int _selectedIndex = 1; // Default to Catalog
 
   final List<Widget> _pages = [
     const HomeScreen(),
@@ -27,9 +27,8 @@ class _MainNavScreenState extends State<MainNavScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          IndexedStack(
-            index: _selectedIndex,
-            children: _pages,
+          RepaintBoundary(
+            child: _pages[_selectedIndex],
           ),
           Positioned(
             left: 20,

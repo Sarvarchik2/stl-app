@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:stl_app/features/auth/data/models/user_model.dart';
 import '../../../../core/app_colors.dart';
 
 class PersonalDataScreen extends StatelessWidget {
-  const PersonalDataScreen({super.key});
+  final UserModel? user;
+  const PersonalDataScreen({super.key, this.user});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -23,17 +26,22 @@ class PersonalDataScreen extends StatelessWidget {
         padding: const EdgeInsets.all(20),
         child: Column(
           children: [
-            _buildInputSection('ФИО', 'Иванов Иван Иванович'),
+            _buildInputSection('Имя', user?.firstName ?? '—'),
             const SizedBox(height: 20),
-            _buildInputSection('Серия и номер паспорта', 'AB 1234567'),
+            _buildInputSection('Фамилия', user?.lastName ?? '—'),
             const SizedBox(height: 20),
-            _buildInputSection('Дата рождения', '01.01.1990'),
+            _buildInputSection('Телефон', user?.phone ?? '—'),
             const SizedBox(height: 20),
-            _buildInputSection('Адрес проживания', 'г. Ташкент, ул. Навои, 1'),
+            _buildInputSection('Email', user?.email ?? '—'),
             const SizedBox(height: 40),
             ElevatedButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Сохранить'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                minimumSize: const Size(double.infinity, 56),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+              child: const Text('Назад', style: TextStyle(fontWeight: FontWeight.bold)),
             ),
           ],
         ),
@@ -56,6 +64,7 @@ class PersonalDataScreen extends StatelessWidget {
           decoration: BoxDecoration(
             color: AppColors.surface,
             borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.white.withOpacity(0.05)),
           ),
           child: Text(
             value,

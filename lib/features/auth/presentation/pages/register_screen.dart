@@ -3,21 +3,21 @@ import 'package:dio/dio.dart';
 import 'package:stl_app/core/app_colors.dart';
 import 'package:stl_app/core/di/service_locator.dart';
 import 'package:stl_app/features/auth/data/repositories/auth_repository.dart';
-import 'package:stl_app/features/auth/presentation/pages/register_screen.dart';
-import 'package:stl_app/features/main_navigation/presentation/pages/main_nav_screen.dart';
 import 'package:stl_app/core/widgets/top_notification.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 import 'otp_screen.dart';
 
-class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+class RegisterScreen extends StatefulWidget {
+  const RegisterScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  State<RegisterScreen> createState() => _RegisterScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _RegisterScreenState extends State<RegisterScreen> {
   final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _firstNameController = TextEditingController();
+  final TextEditingController _lastNameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final AuthRepository _authRepository = sl<AuthRepository>();
   bool _isLoading = false;
@@ -29,18 +29,19 @@ class _LoginScreenState extends State<LoginScreen> {
     type: MaskAutoCompletionType.lazy,
   );
 
-  Future<void> _handleLogin() async {
-    // Concat 998 with digits
+  Future<void> _handleRegister() async {
     final phoneDigits = _phoneFormatter.getUnmaskedText();
     final phone = '998$phoneDigits';
+    final firstName = _firstNameController.text.trim();
+    final lastName = _lastNameController.text.trim();
     final password = _passwordController.text.trim();
     
-    if (phoneDigits.length < 9 || password.isEmpty) {
+    if (phoneDigits.length < 9 || firstName.isEmpty || lastName.isEmpty || password.isEmpty) {
       TopNotification.show(
         context,
         message: phoneDigits.length < 9 
             ? 'Введите полный номер телефона' 
-            : 'Пожалуйста, введите пароль',
+            : 'Пожалуйста, заполните все поля',
         isError: true,
       );
       return;
@@ -48,16 +49,21 @@ class _LoginScreenState extends State<LoginScreen> {
 
     setState(() => _isLoading = true);
     try {
-      await _authRepository.login(phone, password);
+      await _authRepository.register(phone, firstName, lastName, password);
       if (!mounted) return;
-      Navigator.pushAndRemoveUntil(
+      
+      TopNotification.show(
         context,
-        MaterialPageRoute(builder: (context) => const MainNavScreen()),
-        (route) => false,
+        message: 'Регистрация успешна!',
+      );
+      
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => OtpScreen(phone: phone)),
       );
     } catch (e) {
       if (!mounted) return;
-      String errorMessage = 'Ошибка входа';
+      String errorMessage = 'Ошибка регистрации';
       if (e is DioException) {
         final detail = e.response?.data?['detail'];
         if (detail is String) {
@@ -84,7 +90,7 @@ class _LoginScreenState extends State<LoginScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 24.0),
           child: Column(
             children: [
-              const SizedBox(height: 60),
+              const SizedBox(height: 40),
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -93,51 +99,38 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 child: const Icon(
                   Icons.local_shipping,
-                  size: 48,
+                  size: 40,
                   color: Colors.white,
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
               const Text(
-                'STL LOGISTICS',
+                'РЕГИСТРАЦИЯ',
                 style: TextStyle(
-                  fontSize: 28,
+                  fontSize: 22,
                   fontWeight: FontWeight.bold,
                   letterSpacing: 1.1,
                 ),
               ),
-              const SizedBox(height: 4),
-              const Text(
-                '& AUTO',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.primary,
-                ),
-              ),
-              const SizedBox(height: 48),
+              const SizedBox(height: 32),
               
-              Container(
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(30),
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-                child: TextField(
-                  controller: _phoneController,
-                  keyboardType: TextInputType.phone,
-                  inputFormatters: [_phoneFormatter],
-                  style: const TextStyle(fontSize: 18, letterSpacing: 1.2),
-                  decoration: const InputDecoration(
-                    icon: Icon(Icons.phone_outlined, color: AppColors.primary),
-                    hintText: '+998 XX XXX XX XX',
-                    border: InputBorder.none,
-                    filled: false,
-                  ),
-                ),
+              _buildInput(
+                controller: _firstNameController,
+                icon: Icons.person_outline,
+                hint: 'Имя',
+              ),
+              const SizedBox(height: 16),
+
+              _buildInput(
+                controller: _lastNameController,
+                icon: Icons.person_outline,
+                hint: 'Фамилия',
               ),
               const SizedBox(height: 16),
               
+              _buildPhoneInput(),
+              const SizedBox(height: 16),
+
               Container(
                 decoration: BoxDecoration(
                   color: AppColors.surface,
@@ -147,10 +140,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: TextField(
                   controller: _passwordController,
                   obscureText: _obscurePassword,
-                  style: const TextStyle(fontSize: 18, letterSpacing: 1.2),
+                  style: const TextStyle(fontSize: 16),
                   decoration: InputDecoration(
                     icon: const Icon(Icons.lock_outline, color: AppColors.primary),
-                    hintText: 'Пароль',
+                    hintText: 'Придумайте пароль',
                     border: InputBorder.none,
                     filled: false,
                     suffixIcon: IconButton(
@@ -165,10 +158,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
               
-              const SizedBox(height: 40),
+              const SizedBox(height: 32),
               
               ElevatedButton(
-                onPressed: _isLoading ? null : _handleLogin,
+                onPressed: _isLoading ? null : _handleRegister,
                 style: ElevatedButton.styleFrom(
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(30),
@@ -177,7 +170,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 child: _isLoading 
                   ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : const Text('Войти', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  : const Text('Зарегистрироваться', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               ),
               
               const SizedBox(height: 24),
@@ -185,21 +178,64 @@ class _LoginScreenState extends State<LoginScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Text('Нет аккаунта?', style: TextStyle(color: AppColors.grey)),
+                  const Text('Уже есть аккаунт?', style: TextStyle(color: AppColors.grey)),
                   TextButton(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => const RegisterScreen()),
-                      );
-                    },
-                    child: const Text('Создать', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Войти', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
                   ),
                 ],
               ),
               const SizedBox(height: 40),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInput({
+    required TextEditingController controller,
+    required IconData icon,
+    required String hint,
+    TextInputType keyboardType = TextInputType.text,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(30),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+      child: TextField(
+        controller: controller,
+        keyboardType: keyboardType,
+        style: const TextStyle(fontSize: 16),
+        decoration: InputDecoration(
+          icon: Icon(icon, color: AppColors.primary),
+          hintText: hint,
+          border: InputBorder.none,
+          filled: false,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPhoneInput() {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(30),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+      child: TextField(
+        controller: _phoneController,
+        keyboardType: TextInputType.phone,
+        inputFormatters: [_phoneFormatter],
+        style: const TextStyle(fontSize: 16),
+        decoration: const InputDecoration(
+          icon: Icon(Icons.phone_outlined, color: AppColors.primary),
+          hintText: '+998 XX XXX XX XX',
+          border: InputBorder.none,
+          filled: false,
         ),
       ),
     );

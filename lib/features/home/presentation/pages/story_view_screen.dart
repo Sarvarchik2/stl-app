@@ -1,244 +1,249 @@
 import 'package:flutter/material.dart';
-import 'dart:async';
-import '../../../../core/app_colors.dart';
+import 'package:stl_app/core/app_colors.dart';
+import 'package:stl_app/core/localization/app_strings.dart';
+import 'package:stl_app/features/home/data/models/story_model.dart';
+import 'package:stl_app/core/utils/url_util.dart';
+import '../widgets/story_progress_bar_painter.dart';
 
 class StoryViewScreen extends StatefulWidget {
-  final String title;
-  final int initialIndex;
+  final StoryModel story;
 
-  const StoryViewScreen({
-    super.key,
-    required this.title,
-    this.initialIndex = 0,
-  });
+  const StoryViewScreen({super.key, required this.story});
 
   @override
   State<StoryViewScreen> createState() => _StoryViewScreenState();
 }
 
-class _StoryViewScreenState extends State<StoryViewScreen> {
+class _StoryViewScreenState extends State<StoryViewScreen> with SingleTickerProviderStateMixin {
   late PageController _pageController;
+  late AnimationController _animController;
   int _currentIndex = 0;
-  Timer? _timer;
-  double _progress = 0.0;
-
-  final List<Map<String, dynamic>> _stories = [
-    {
-      'title': 'Важно',
-      'content': 'Специальное предложение!\n\nПолучите скидку до 15% на доставку авто из США при оформлении заявки до конца месяца.',
-      'icon': Icons.star_rounded,
-      'color': AppColors.primary,
-    },
-    {
-      'title': 'О нас',
-      'content': 'STL Logistics - ваш надежный партнер в импорте автомобилей из США.\n\n✓ Более 500 довольных клиентов\n✓ Работаем с 2018 года\n✓ Полное юридическое сопровождение',
-      'icon': Icons.info_outline,
-      'color': Colors.blue,
-    },
-    {
-      'title': 'Доставка',
-      'content': 'Быстрая доставка из США\n\n🚢 Морская доставка: 30-45 дней\n✈️ Авиа доставка: 7-10 дней\n📦 Полное страхование груза\n🔒 Отслеживание в реальном времени',
-      'icon': Icons.local_shipping_outlined,
-      'color': Colors.green,
-    },
-    {
-      'title': 'Отзывы',
-      'content': '⭐️⭐️⭐️⭐️⭐️\n\n"Отличный сервис! Привезли Tesla Model 3 за 35 дней. Все документы оформили быстро."\n\n- Азиз М., Ташкент',
-      'icon': Icons.reviews_outlined,
-      'color': Colors.amber,
-    },
-    {
-      'title': 'Гарантия',
-      'content': 'Наши гарантии:\n\n✓ Возврат средств при несоответствии\n✓ Проверка авто перед отправкой\n✓ Юридическая чистота\n✓ Помощь в растаможке\n✓ Послепродажная поддержка',
-      'icon': Icons.verified_user_outlined,
-      'color': Colors.purple,
-    },
-  ];
 
   @override
   void initState() {
     super.initState();
-    _currentIndex = widget.initialIndex;
-    _pageController = PageController(initialPage: widget.initialIndex);
-    _startTimer();
-  }
+    _pageController = PageController();
+    _animController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 5),
+    );
 
-  void _startTimer() {
-    _progress = 0.0;
-    _timer?.cancel();
-    _timer = Timer.periodic(const Duration(milliseconds: 50), (timer) {
-      if (!mounted) {
-        timer.cancel();
-        return;
+    _animController.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        _nextSlide();
       }
-      setState(() {
-        _progress += 0.01;
-        if (_progress >= 1.0) {
-          _nextStory();
-        }
-      });
     });
+
+    _animController.forward();
   }
 
-  void _nextStory() {
-    if (_currentIndex < _stories.length - 1) {
-      _pageController.nextPage(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-      );
+  void _nextSlide() {
+    if (_currentIndex < widget.story.slides.length - 1) {
+      setState(() {
+        _currentIndex++;
+        _pageController.animateToPage(
+          _currentIndex,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+        );
+        _animController.reset();
+        _animController.forward();
+      });
     } else {
       Navigator.pop(context);
     }
   }
 
-  void _previousStory() {
+  void _previousSlide() {
     if (_currentIndex > 0) {
-      _pageController.previousPage(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-      );
+      setState(() {
+        _currentIndex--;
+        _pageController.animateToPage(
+          _currentIndex,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+        );
+        _animController.reset();
+        _animController.forward();
+      });
+    } else {
+      _animController.reset();
+      _animController.forward();
     }
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
+    _animController.dispose();
     _pageController.dispose();
     super.dispose();
+  }
+
+  String _getLocalized(LocalizedString text) {
+    switch (AppStrings.currentLanguage) {
+      case AppLanguage.uz: return text.uz;
+      case AppLanguage.en: return text.en;
+      case AppLanguage.ru:
+      default: return text.ru;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: GestureDetector(
-        onTapDown: (details) {
-          final width = MediaQuery.of(context).size.width;
-          if (details.globalPosition.dx < width / 2) {
-            _previousStory();
-          } else {
-            _nextStory();
-          }
-        },
-        child: Stack(
-          children: [
-            PageView.builder(
-              controller: _pageController,
-              onPageChanged: (index) {
-                setState(() {
-                  _currentIndex = index;
-                });
-                _startTimer();
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          // 1. Background Content Layer
+          ExcludeSemantics(
+            child: GestureDetector(
+              onTapDown: (details) {
+                final width = MediaQuery.of(context).size.width;
+                if (details.globalPosition.dx < width / 2) {
+                  _previousSlide();
+                } else {
+                  _nextSlide();
+                }
               },
-              itemCount: _stories.length,
-              itemBuilder: (context, index) {
-                final story = _stories[index];
-                return Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        story['color'].withOpacity(0.3),
-                        Colors.black,
+              child: PageView.builder(
+                controller: _pageController,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: widget.story.slides.length,
+                itemBuilder: (context, index) {
+                  final slide = widget.story.slides[index];
+                  return Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Image.network(
+                        UrlUtil.sanitize(slide.imageUrl),
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const Center(
+                          child: Icon(Icons.image_not_supported, color: Colors.white, size: 50),
+                        ),
+                      ),
+                      Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.black.withOpacity(0.6),
+                              Colors.transparent,
+                              Colors.black.withOpacity(0.8),
+                            ],
+                            stops: const [0.0, 0.4, 1.0],
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ),
+
+          // 2. UI Overlay Layer
+          ExcludeSemantics(
+            child: SafeArea(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Top Bar: Progress
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: SizedBox(
+                            height: 3,
+                            child: AnimatedBuilder(
+                              animation: _animController,
+                              builder: (context, child) {
+                                return CustomPaint(
+                                  size: const Size(double.infinity, 3),
+                                  painter: StoryProgressBarPainter(
+                                    slideCount: widget.story.slides.length,
+                                    currentIndex: _currentIndex,
+                                    progress: _animController.value,
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   ),
-                  child: SafeArea(
-                    child: Padding(
-                      padding: const EdgeInsets.all(20),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const SizedBox(height: 60),
-                          Icon(
-                            story['icon'],
-                            size: 80,
-                            color: story['color'],
+
+                  // Top Bar: Title & Close
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                    child: Row(
+                      children: [
+                        const CircleAvatar(
+                          radius: 18,
+                          backgroundColor: AppColors.primary,
+                          child: Icon(Icons.star, color: Colors.white, size: 18),
+                        ),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Text(
+                            'STL AUTO',
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
                           ),
-                          const SizedBox(height: 32),
-                          Text(
-                            story['title'],
-                            style: const TextStyle(
-                              fontSize: 32,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(Icons.close, color: Colors.white),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const Spacer(),
+
+                  // Bottom Content
+                  Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _getLocalized(widget.story.slides[_currentIndex].content),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
                           ),
-                          const SizedBox(height: 24),
-                          Text(
-                            story['content'],
-                            style: const TextStyle(
-                              fontSize: 18,
-                              height: 1.6,
-                              color: Colors.white,
+                        ),
+                        const SizedBox(height: 24),
+                        if (widget.story.slides[_currentIndex].buttonText != null) ...[
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              onPressed: () {},
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.primary,
+                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              ),
+                              child: Text(
+                                _getLocalized(widget.story.slides[_currentIndex].buttonText!),
+                                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                              ),
                             ),
                           ),
                         ],
-                      ),
+                        const SizedBox(height: 20),
+                      ],
                     ),
                   ),
-                );
-              },
-            ),
-            
-            // Progress bars at top
-            SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.all(8),
-                child: Row(
-                  children: List.generate(_stories.length, (index) {
-                    return Expanded(
-                      child: Container(
-                        height: 3,
-                        margin: const EdgeInsets.symmetric(horizontal: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.3),
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                        child: FractionallySizedBox(
-                          alignment: Alignment.centerLeft,
-                          widthFactor: index == _currentIndex
-                              ? _progress
-                              : (index < _currentIndex ? 1.0 : 0.0),
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(2),
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  }),
-                ),
+                ],
               ),
             ),
-            
-            // Close button
-            SafeArea(
-              child: Positioned(
-                top: 16,
-                right: 16,
-                child: GestureDetector(
-                  onTap: () => Navigator.pop(context),
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.5),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.close,
-                      color: Colors.white,
-                      size: 24,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

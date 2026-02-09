@@ -1,20 +1,62 @@
 import 'package:flutter/material.dart';
-import '../../../../core/app_colors.dart';
+import 'package:dio/dio.dart';
+import 'package:stl_app/core/di/service_locator.dart';
+import 'package:stl_app/features/applications/data/repositories/application_repository.dart';
+import 'package:stl_app/core/app_colors.dart';
+import 'package:stl_app/features/catalog/data/models/car_model.dart';
+import 'package:stl_app/core/widgets/top_notification.dart';
+import 'package:stl_app/core/utils/url_util.dart';
 
 class CarDetailScreen extends StatelessWidget {
-  final String name;
-  final String price;
-  final String imageUrl;
+  final CarModel car;
+  final String heroTag;
 
   const CarDetailScreen({
     super.key,
-    required this.name,
-    required this.price,
-    required this.imageUrl,
+    required this.car,
+    required this.heroTag,
   });
+
+  Future<void> _submitApplication(BuildContext context) async {
+    try {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
+      );
+
+      await sl<ApplicationRepository>().createApplication(carId: car.id);
+
+      if (context.mounted) {
+        Navigator.pop(context); // Close loading
+        TopNotification.show(
+          context,
+          message: 'Заявка успешно создана! Наш менеджер свяжется с вами.',
+        );
+      }
+    } catch (e) {
+      if (context.mounted) Navigator.pop(context); // Close loading
+      
+      String message = 'Ошибка при создании заявки';
+      if (e is DioException) {
+        message = e.response?.data?['detail'] ?? message;
+      }
+      
+      if (context.mounted) {
+        TopNotification.show(
+          context,
+          message: message,
+          isError: true,
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final String priceText = '${car.finalPriceUsd} \$';
+    final String carName = '${car.make} ${car.model}';
+
     return Scaffold(
       body: Stack(
         children: [
@@ -26,16 +68,15 @@ class CarDetailScreen extends StatelessWidget {
                 // Car Image Header
                 Stack(
                   children: [
-                    Hero(
-                      tag: name,
-                      child: Container(
-                        height: 350,
-                        width: double.infinity,
-                        decoration: BoxDecoration(
-                          image: DecorationImage(
-                            image: NetworkImage(imageUrl),
-                            fit: BoxFit.cover,
-                          ),
+                    Container(
+                      height: 350,
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        image: DecorationImage(
+                          image: (car.imageUrl != null && car.imageUrl!.isNotEmpty)
+                              ? NetworkImage(UrlUtil.sanitize(car.imageUrl!))
+                              : const AssetImage('assets/images/car_placeholder.png') as ImageProvider,
+                          fit: BoxFit.cover,
                         ),
                       ),
                     ),
@@ -61,7 +102,7 @@ class CarDetailScreen extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            name,
+                            carName,
                             style: const TextStyle(
                               fontSize: 28,
                               fontWeight: FontWeight.bold,
@@ -91,11 +132,15 @@ class CarDetailScreen extends StatelessWidget {
                       // Tags
                       Row(
                         children: [
-                          _buildTag('2023'),
-                          const SizedBox(width: 8),
-                          _buildTag('Белый'),
-                          const SizedBox(width: 8),
-                          _buildTag('Хэтчбек'),
+                          _buildTag('${car.year}'),
+                          if (car.fuelType != null) ...[
+                            const SizedBox(width: 8),
+                            _buildTag(car.fuelType!),
+                          ],
+                          if (car.bodyType != null) ...[
+                            const SizedBox(width: 8),
+                            _buildTag(car.bodyType!),
+                          ],
                         ],
                       ),
                       const SizedBox(height: 16),
@@ -118,18 +163,23 @@ class CarDetailScreen extends StatelessWidget {
                       const SizedBox(height: 32),
                       
                       // Specs Grid
-                      GridView.count(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        crossAxisCount: 2,
-                        mainAxisSpacing: 12,
-                        crossAxisSpacing: 12,
-                        childAspectRatio: 2.2,
+                      Column(
                         children: [
-                          _buildSpecItem('Пробег', '0 км'),
-                          _buildSpecItem('Двигатель', '1.4L'),
-                          _buildSpecItem('VIN', 'XXXX****XXXX3456'),
-                          _buildSpecItem('КПП', 'Механика'),
+                          Row(
+                            children: [
+                              Expanded(child: _buildSpecItem('Пробег', '${car.mileage ?? 0} миль')),
+                              const SizedBox(width: 12),
+                              Expanded(child: _buildSpecItem('Двигатель', car.engine ?? 'N/A')),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(child: _buildSpecItem('Трансмиссия', car.transmission ?? 'N/A')),
+                              const SizedBox(width: 12),
+                              Expanded(child: _buildSpecItem('Привод', car.drivetrain ?? 'N/A')),
+                            ],
+                          ),
                         ],
                       ),
                       
@@ -145,9 +195,10 @@ class CarDetailScreen extends StatelessWidget {
                         ),
                         child: Column(
                           children: [
-                            _buildPriceRow('Рыночная цена', '160 000 000 сум', isOld: true),
+                            if (car.sourcePriceUsd != null)
+                              _buildPriceRow('Цена на аукционе', '${car.sourcePriceUsd} \$', isOld: true),
                             const SizedBox(height: 12),
-                            _buildPriceRow('Скидка (12%)', '-19 200 000 сум', isDiscount: true),
+                            _buildPriceRow('Услуги и доставка', 'Включено', isDiscount: true),
                             const Padding(
                               padding: EdgeInsets.symmetric(vertical: 16),
                               child: Divider(color: Colors.white10),
@@ -155,9 +206,9 @@ class CarDetailScreen extends StatelessWidget {
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                const Text('Ваша цена:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                                const Text('Полная цена:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                                 Text(
-                                  price,
+                                  priceText,
                                   style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
                                 ),
                               ],
@@ -167,6 +218,14 @@ class CarDetailScreen extends StatelessWidget {
                       ),
                       
                       const SizedBox(height: 32),
+                      
+                      // Features
+                      if (car.features.isNotEmpty) ...[
+                        const Text('Особенности', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 16),
+                        ...car.features.map((feature) => _buildServiceItem(feature)).toList(),
+                        const SizedBox(height: 32),
+                      ],
                       
                       // What's included
                       const Text('Что входит в услугу', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
@@ -193,7 +252,7 @@ class CarDetailScreen extends StatelessWidget {
                             SizedBox(width: 12),
                             Expanded(
                               child: Text(
-                                'VIN-номер полностью раскрывается только после подтверждения заявки менеджером',
+                                'Все автомобили проходят тщательную проверку перед покупкой на аукционе.',
                                 style: TextStyle(color: AppColors.grey, fontSize: 13),
                               ),
                             ),
@@ -232,7 +291,7 @@ class CarDetailScreen extends StatelessWidget {
             left: 20,
             right: 20,
             child: ElevatedButton(
-              onPressed: () {},
+              onPressed: () => _submitApplication(context),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 padding: const EdgeInsets.symmetric(vertical: 18),
@@ -315,7 +374,7 @@ class CarDetailScreen extends StatelessWidget {
         children: [
           const Icon(Icons.check_rounded, color: Colors.green, size: 18),
           const SizedBox(width: 12),
-          Text(text, style: const TextStyle(color: Colors.white70, fontSize: 14)),
+          Expanded(child: Text(text, style: const TextStyle(color: Colors.white70, fontSize: 14))),
         ],
       ),
     );
