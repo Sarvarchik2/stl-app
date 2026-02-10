@@ -162,7 +162,14 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
                 onRefresh: _loadCars,
                 color: AppColors.primary,
                 child: _isLoading
-                    ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+                    ? const SingleChildScrollView(
+                        physics: AlwaysScrollableScrollPhysics(),
+                        child: Center(
+                            child: Padding(
+                          padding: EdgeInsets.all(80.0),
+                          child: CircularProgressIndicator(color: AppColors.primary),
+                        )),
+                      )
                     : _error != null
                         ? _buildErrorState()
                         : _filteredCars.isEmpty
@@ -230,8 +237,6 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
                         ),
                       ),
                     ),
-                  const SizedBox(width: 8),
-                  _buildNotificationIcon(),
                 ],
               ),
             ],
@@ -239,87 +244,117 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
           const SizedBox(height: 20),
           
           // Search Bar
-          Row(
-            children: [
-              Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: _searchFocusNode.hasFocus 
-                          ? AppColors.primary 
-                          : Colors.transparent,
-                      width: 2,
-                    ),
-                  ),
-                  child: TextField(
-                    controller: _searchController,
-                    focusNode: _searchFocusNode,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: InputDecoration(
-                      hintText: 'Поиск по марке, модели...',
-                      hintStyle: TextStyle(color: AppColors.grey.withOpacity(0.7)),
-                      prefixIcon: const Icon(Icons.search, color: AppColors.grey),
-                      suffixIcon: _searchController.text.isNotEmpty
-                          ? IconButton(
-                              icon: const Icon(Icons.clear, color: AppColors.grey, size: 20),
-                              onPressed: () {
-                                _searchController.clear();
-                                _searchFocusNode.unfocus();
-                              },
-                            )
-                          : null,
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                    ),
-                    onTap: () => setState(() {}),
-                    onEditingComplete: () {
-                      _searchFocusNode.unfocus();
-                      setState(() {});
-                    },
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              GestureDetector(
-                onTap: _showFilterSheet,
-                child: Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [AppColors.primary, AppColors.primary.withOpacity(0.8)],
-                    ),
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.primary.withOpacity(0.3),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
+          SizedBox(
+            height: 56,
+            child: Row(
+              children: [
+                Expanded(
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(
+                        color: _searchFocusNode.hasFocus 
+                            ? AppColors.primary.withOpacity(0.5) 
+                            : Colors.white.withOpacity(0.05),
+                        width: 1.5,
                       ),
-                    ],
-                  ),
-                  child: Stack(
-                    children: [
-                      const Icon(Icons.tune_rounded, color: Colors.white),
-                      if (_hasActiveFilters)
-                        Positioned(
-                          right: -2,
-                          top: -2,
-                          child: Container(
-                            width: 10,
-                            height: 10,
-                            decoration: const BoxDecoration(
-                              color: Colors.red,
-                              shape: BoxShape.circle,
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: Row(
+                      children: [
+                        const SizedBox(width: 16),
+                        Icon(
+                          Icons.search_rounded, 
+                          color: _searchFocusNode.hasFocus ? AppColors.primary : AppColors.grey, 
+                          size: 20
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextField(
+                            controller: _searchController,
+                            focusNode: _searchFocusNode,
+                            style: const TextStyle(color: Colors.white, fontSize: 15),
+                            cursorColor: AppColors.primary,
+                            decoration: InputDecoration(
+                              hintText: 'Поиск по марке, модели...',
+                              hintStyle: TextStyle(
+                                color: AppColors.grey.withOpacity(0.4), 
+                                fontSize: 15,
+                                fontWeight: FontWeight.w400,
+                              ),
+                              border: InputBorder.none,
+                              isDense: true,
+                              contentPadding: EdgeInsets.zero,
                             ),
+                            textAlignVertical: TextAlignVertical.center,
+                            onChanged: (_) => setState(() {}),
+                            onTap: () => setState(() {}),
                           ),
                         ),
-                    ],
+                        if (_searchController.text.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: IconButton(
+                              icon: const Icon(Icons.cancel_rounded, color: AppColors.grey, size: 20),
+                              onPressed: () {
+                                _searchController.clear();
+                                _filterCars();
+                                setState(() {});
+                              },
+                              splashRadius: 20,
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            ],
+                const SizedBox(width: 12),
+                GestureDetector(
+                  onTap: _showFilterSheet,
+                  child: Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [AppColors.primary, Color(0xFFFF8C00)],
+                      ),
+                      borderRadius: BorderRadius.circular(18),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primary.withOpacity(0.3),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        const Icon(Icons.tune_rounded, color: Colors.white, size: 24),
+                        if (_hasActiveFilters)
+                          Positioned(
+                            right: 14,
+                            top: 14,
+                            child: Container(
+                              width: 10,
+                              height: 10,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                shape: BoxShape.circle,
+                                border: Border.all(color: AppColors.primary, width: 2),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
           
           // Quick Filters
@@ -379,21 +414,11 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
     );
   }
 
-  Widget _buildNotificationIcon() {
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        shape: BoxShape.circle,
-      ),
-      child: const Icon(Icons.notifications_none, size: 22, color: Colors.white),
-    );
-  }
-
   Widget _buildErrorState() {
-    return Center(
+    return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
       child: Padding(
-        padding: const EdgeInsets.all(32),
+        padding: const EdgeInsets.symmetric(vertical: 80, horizontal: 32),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -418,9 +443,10 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
   }
 
   Widget _buildEmptyState() {
-    return Center(
+    return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
       child: Padding(
-        padding: const EdgeInsets.all(32),
+        padding: const EdgeInsets.symmetric(vertical: 80, horizontal: 32),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -452,7 +478,6 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
         ),
       ),
     );
-  }
 
   Widget _buildCarsList() {
     return ListView.builder(

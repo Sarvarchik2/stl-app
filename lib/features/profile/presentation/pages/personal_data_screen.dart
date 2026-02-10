@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:stl_app/features/auth/data/models/user_model.dart';
+import 'package:stl_app/core/utils/formatter_util.dart';
 import '../../../../core/app_colors.dart';
 
 class PersonalDataScreen extends StatelessWidget {
@@ -30,7 +31,7 @@ class PersonalDataScreen extends StatelessWidget {
             const SizedBox(height: 20),
             _buildInputSection('Фамилия', user?.lastName ?? '—'),
             const SizedBox(height: 20),
-            _buildInputSection('Телефон', user?.phone ?? '—'),
+            _buildInputSection('Телефон', user?.phone != null ? FormatterUtil.formatPhone(user!.phone) : '—'),
             const SizedBox(height: 20),
             _buildInputSection('Email', user?.email ?? '—'),
             const SizedBox(height: 40),

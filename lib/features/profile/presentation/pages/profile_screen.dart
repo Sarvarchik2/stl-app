@@ -7,6 +7,7 @@ import 'package:stl_app/features/auth/presentation/pages/login_screen.dart';
 import 'package:stl_app/features/applications/data/repositories/application_repository.dart';
 import 'package:stl_app/features/applications/data/models/application_model.dart';
 import 'package:stl_app/core/localization/app_strings.dart';
+import 'package:stl_app/core/utils/formatter_util.dart';
 import 'personal_data_screen.dart';
 import 'my_documents_screen.dart';
 import 'faq_screen.dart';
@@ -167,13 +168,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
                         ),
                         Text(
-                          user.phone,
+                          FormatterUtil.formatPhone(user.phone),
                           style: const TextStyle(color: AppColors.grey, fontSize: 14),
                         ),
                       ],
                     ),
                     const Spacer(),
-                    _buildNotificationIcon(),
                   ],
                 ),
                 
@@ -219,7 +219,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
                               ),
                               Text(
-                                user.phone,
+                                FormatterUtil.formatPhone(user.phone),
                                 style: const TextStyle(color: Colors.white70, fontSize: 14),
                               ),
                             ],
@@ -264,19 +264,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       MaterialPageRoute(builder: (context) => const MyDocumentsScreen()),
                     ),
                   ),
-                  _buildMenuItem(Icons.phone_android_outlined, AppStrings.get('phone'), user.phone),
+                  _buildMenuItem(Icons.phone_android_outlined, AppStrings.get('phone'), FormatterUtil.formatPhone(user.phone)),
                 ]),
                 
                 const SizedBox(height: 24),
                 Text(AppStrings.get('settings'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 16),
                 _buildMenuSection([
-                  _buildMenuItem(
-                    Icons.notifications_none_outlined, 
-                    AppStrings.get('notifications'), 
-                    'Настройки оповещений', 
-                    trailing: Switch(value: true, onChanged: (v){}, activeThumbColor: AppColors.primary)
-                  ),
                   _buildMenuItem(
                     Icons.translate, 
                     AppStrings.get('language'), 
@@ -508,14 +502,4 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildNotificationIcon() {
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        shape: BoxShape.circle,
-      ),
-      child: const Icon(Icons.notifications_none, size: 20),
-    );
-  }
 }

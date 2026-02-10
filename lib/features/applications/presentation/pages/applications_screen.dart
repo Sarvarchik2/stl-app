@@ -8,6 +8,7 @@ import 'package:stl_app/features/applications/data/repositories/application_repo
 import 'package:intl/intl.dart';
 import 'package:stl_app/core/localization/app_strings.dart';
 import 'package:stl_app/core/utils/url_util.dart';
+import 'application_detail_screen.dart';
 
 class ApplicationsScreen extends StatefulWidget {
   const ApplicationsScreen({super.key});
@@ -89,13 +90,8 @@ class _ApplicationsScreenState extends State<ApplicationsScreen> {
         const SizedBox(width: 12),
         Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(_user?.fullName ?? 'STL LOGISTICS', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)), Text(_user?.phone ?? '', style: const TextStyle(color: AppColors.grey, fontSize: 14))]),
         const Spacer(),
-        _buildNotificationIcon(),
       ],
     );
-  }
-
-  Widget _buildNotificationIcon() {
-    return Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(15)), child: const Icon(Icons.notifications_none_rounded, color: Colors.white));
   }
 
   Widget _buildEmptyState() {
@@ -134,35 +130,43 @@ class _ApplicationsScreenState extends State<ApplicationsScreen> {
     final dateStr = DateFormat('dd MMM yyyy', 'ru').format(app.createdAt);
     final imageUrl = app.carImageUrl;
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(24), border: Border.all(color: Colors.white.withOpacity(0.05))),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: Container(
-                  width: 60, height: 60, decoration: const BoxDecoration(color: AppColors.darkGrey),
-                  child: imageUrl != null && imageUrl.isNotEmpty
-                      ? Image.network(
-                          UrlUtil.sanitize(imageUrl), 
-                          fit: BoxFit.cover, 
-                          errorBuilder: (_, __, ___) => const Icon(Icons.drive_eta_rounded, color: AppColors.grey),
-                        )
-                      : const Icon(Icons.drive_eta_rounded, color: AppColors.grey),
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ApplicationDetailScreen(application: app),
+        ),
+      ),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(24), border: Border.all(color: Colors.white.withOpacity(0.05))),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    width: 60, height: 60, decoration: const BoxDecoration(color: AppColors.darkGrey),
+                    child: imageUrl != null && imageUrl.isNotEmpty
+                        ? Image.network(
+                            UrlUtil.sanitize(imageUrl), 
+                            fit: BoxFit.cover, 
+                            errorBuilder: (_, __, ___) => const Icon(Icons.drive_eta_rounded, color: AppColors.grey),
+                          )
+                        : const Icon(Icons.drive_eta_rounded, color: AppColors.grey),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('${app.carBrand} ${app.carModel}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis), Text('ID: ${app.id.substring(0, 8)}...', style: const TextStyle(fontSize: 12, color: AppColors.grey))])),
-              _buildStatusBadge(statusData),
-            ],
-          ),
-          const SizedBox(height: 20),
-          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text('Создано: $dateStr', style: const TextStyle(color: AppColors.grey, fontSize: 12)), Text('${app.finalPrice} \$', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.primary))]),
-        ],
+                const SizedBox(width: 12),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('${app.carBrand} ${app.carModel}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis), Text('ID: ${app.id.substring(0, 8)}...', style: const TextStyle(fontSize: 12, color: AppColors.grey))])),
+                _buildStatusBadge(statusData),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text('Создано: $dateStr', style: const TextStyle(color: AppColors.grey, fontSize: 12)), Text('${app.finalPrice} \$', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.primary))]),
+          ],
+        ),
       ),
     );
   }

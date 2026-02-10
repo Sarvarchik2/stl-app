@@ -90,6 +90,16 @@ class _StoryViewScreenState extends State<StoryViewScreen> with SingleTickerProv
 
   @override
   Widget build(BuildContext context) {
+    if (widget.story.slides.isEmpty) {
+      return Scaffold(
+        backgroundColor: Colors.black,
+        appBar: AppBar(backgroundColor: Colors.transparent, elevation: 0),
+        body: const Center(
+          child: Text('В этой истории нет слайдов', style: TextStyle(color: Colors.white)),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
