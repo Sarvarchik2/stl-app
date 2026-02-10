@@ -1,8 +1,6 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter_pdfview/flutter_pdfview.dart';
+import 'package:pdfx/pdfx.dart';
 import 'package:http/http.dart' as http;
-import 'package:path_provider/path_provider.dart';
 import 'package:stl_app/core/app_colors.dart';
 
 class PdfViewerScreen extends StatefulWidget {
@@ -20,28 +18,34 @@ class PdfViewerScreen extends StatefulWidget {
 }
 
 class _PdfViewerScreenState extends State<PdfViewerScreen> {
-  String? _localPath;
+  PdfController? _pdfController;
   bool _isLoading = true;
   String? _error;
 
   @override
   void initState() {
     super.initState();
-    _downloadFile();
+    _loadPdf();
   }
 
-  Future<void> _downloadFile() async {
+  void _loadPdf() async {
     try {
+      // Fetch PDF data from URL
       final response = await http.get(Uri.parse(widget.url));
-      final dir = await getApplicationDocumentsDirectory();
-      final file = File('${dir.path}/${widget.filename}');
-      await file.writeAsBytes(response.bodyBytes);
       
-      if (mounted) {
-        setState(() {
-          _localPath = file.path;
-          _isLoading = false;
-        });
+      if (response.statusCode == 200) {
+        final document = await PdfDocument.openData(response.bodyBytes);
+        _pdfController = PdfController(
+          document: Future.value(document),
+        );
+        
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
+      } else {
+        throw Exception('Failed to load PDF: ${response.statusCode}');
       }
     } catch (e) {
       if (mounted) {
@@ -51,6 +55,12 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
         });
       }
     }
+  }
+
+  @override
+  void dispose() {
+    _pdfController?.dispose();
+    super.dispose();
   }
 
   @override
@@ -64,14 +74,23 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
       body: _isLoading 
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? Center(child: Text('Ошибка загрузки: $_error'))
-              : PDFView(
-                  filePath: _localPath,
-                  enableSwipe: true,
-                  swipeHorizontal: false,
-                  autoSpacing: false,
-                  pageFling: false,
-                ),
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Text(
+                      'Ошибка загрузки: $_error',
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                )
+              : _pdfController != null
+                  ? PdfView(
+                      controller: _pdfController!,
+                      scrollDirection: Axis.vertical,
+                      onDocumentLoaded: (document) {},
+                      onPageChanged: (page) {},
+                    )
+                  : const Center(child: Text('Не удалось загрузить PDF')),
     );
   }
 }
