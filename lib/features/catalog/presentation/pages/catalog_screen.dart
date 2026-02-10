@@ -285,8 +285,7 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
                                 fontWeight: FontWeight.w400,
                               ),
                               border: InputBorder.none,
-                              isDense: true,
-                              contentPadding: EdgeInsets.zero,
+                              contentPadding: const EdgeInsets.symmetric(vertical: 12),
                             ),
                             textAlignVertical: TextAlignVertical.center,
                             onChanged: (_) => setState(() {}),
@@ -478,6 +477,7 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
         ),
       ),
     );
+  }
 
   Widget _buildCarsList() {
     return ListView.builder(
