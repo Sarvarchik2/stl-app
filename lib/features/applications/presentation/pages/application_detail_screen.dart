@@ -7,7 +7,15 @@ import 'package:stl_app/features/catalog/data/repositories/catalog_repository.da
 import 'package:stl_app/core/utils/url_util.dart';
 import 'package:intl/intl.dart';
 
+import 'package:stl_app/features/applications/presentation/widgets/pdf_viewer_screen.dart';
+import 'package:stl_app/features/applications/presentation/widgets/video_player_screen.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:stl_app/features/applications/data/repositories/application_repository.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:http/http.dart' as http;
+import 'dart:io';
+import 'package:share_plus/share_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ApplicationDetailScreen extends StatefulWidget {
   final ApplicationModel application;
@@ -23,15 +31,23 @@ class ApplicationDetailScreen extends StatefulWidget {
 
 class _ApplicationDetailScreenState extends State<ApplicationDetailScreen> {
   final CatalogRepository _catalogRepository = sl<CatalogRepository>();
+  final ApplicationRepository _applicationRepository = sl<ApplicationRepository>();
+  
+  late ApplicationModel _application;
   CarModel? _car;
-  bool _isLoading = true;
+  bool _isCarLoading = true;
+  bool _isAppLoading = true;
   String? _error;
 
   Future<void> _makeCall() async {
-    final Uri telUri = Uri.parse('tel:+998900000000');
-    if (await canLaunchUrl(telUri)) {
-      await launchUrl(telUri);
-    } else {
+    try {
+      final Uri telUri = Uri.parse('tel:+998900000000');
+      debugPrint('Calling: $telUri');
+      if (!await launchUrl(telUri)) {
+        throw 'Could not launch call';
+      }
+    } catch (e) {
+      debugPrint('Error making call: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Не удалось совершить звонок')),
@@ -43,25 +59,66 @@ class _ApplicationDetailScreenState extends State<ApplicationDetailScreen> {
   @override
   void initState() {
     super.initState();
-    _loadCarDetails();
+    _application = widget.application;
+    _loadAllDetails();
+  }
+
+  Future<void> _loadAllDetails() async {
+    setState(() {
+      _isCarLoading = true;
+      _isAppLoading = true;
+      _error = null;
+    });
+
+    try {
+      // Load both in parallel
+      await Future.wait([
+        _loadApplicationDetails(),
+        _loadCarDetails(),
+      ]);
+    } catch (e) {
+      // Errors are handled inside individual methods
+    }
+  }
+
+  Future<void> _loadApplicationDetails() async {
+    try {
+      final app = await _applicationRepository.getApplicationById(_application.id);
+      if (mounted) {
+        setState(() {
+          _application = app;
+          _isAppLoading = false;
+        });
+      }
+    } catch (e) {
+      // If server fails (e.g. 500 error), we use the data we already have from the list
+      // ignoring the error to show at least what we have
+      debugPrint('Error loading app details: $e');
+      if (mounted) {
+        setState(() {
+          _isAppLoading = false;
+        });
+      }
+    }
   }
 
   Future<void> _loadCarDetails() async {
     try {
-      final car = await _catalogRepository.getCarById(widget.application.carId);
+      final car = await _catalogRepository.getCarById(_application.carId);
       if (mounted) {
         setState(() {
           _car = car;
-          _isLoading = false;
+          _isCarLoading = false;
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          _error = e.toString();
-          _isLoading = false;
+          _isCarLoading = false;
+          // If we can't load car specs, it's not fatal for the whole screen
         });
       }
+      debugPrint('Error loading car details: $e');
     }
   }
 
@@ -73,11 +130,7 @@ class _ApplicationDetailScreenState extends State<ApplicationDetailScreen> {
         slivers: [
           _buildSliverAppBar(),
           SliverToBoxAdapter(
-            child: _isLoading
-                ? const Center(child: Padding(padding: EdgeInsets.all(40.0), child: CircularProgressIndicator(color: AppColors.primary)))
-                : _error != null
-                    ? _buildErrorContent()
-                    : _buildMainContent(),
+            child: _buildMainContent(),
           ),
           const SliverPadding(padding: EdgeInsets.only(bottom: 100)),
         ],
@@ -100,9 +153,9 @@ class _ApplicationDetailScreenState extends State<ApplicationDetailScreen> {
         background: Stack(
           fit: StackFit.expand,
           children: [
-            if (widget.application.carImageUrl != null)
+            if (_application.carImageUrl != null)
               Image.network(
-                UrlUtil.sanitize(widget.application.carImageUrl!),
+                UrlUtil.sanitize(_application.carImageUrl!),
                 fit: BoxFit.cover,
                 errorBuilder: (_, __, ___) => const Icon(Icons.directions_car, size: 60, color: AppColors.grey),
               )
@@ -128,8 +181,8 @@ class _ApplicationDetailScreenState extends State<ApplicationDetailScreen> {
   }
 
   Widget _buildMainContent() {
-    final statusData = _getStatusData(widget.application.status);
-    final dateStr = DateFormat('dd MMMM yyyy, HH:mm', 'ru').format(widget.application.createdAt);
+    final statusData = _getStatusData(_application.status);
+    final dateStr = DateFormat('dd MMMM yyyy, HH:mm', 'ru').format(_application.createdAt);
 
     return Padding(
       padding: const EdgeInsets.all(20),
@@ -144,12 +197,12 @@ class _ApplicationDetailScreenState extends State<ApplicationDetailScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '${widget.application.carBrand} ${widget.application.carModel}',
+                      '${_application.carBrand} ${_application.carModel}',
                       style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Заявка №${widget.application.id.substring(0, 8).toUpperCase()}',
+                      'Заявка №${_application.id.substring(0, 8).toUpperCase()}',
                       style: const TextStyle(color: AppColors.grey, fontSize: 13),
                     ),
                   ],
@@ -164,27 +217,85 @@ class _ApplicationDetailScreenState extends State<ApplicationDetailScreen> {
             'Информация о заявке',
             [
               _buildInfoRow(Icons.calendar_today_outlined, 'Дата создания', dateStr),
-              _buildInfoRow(Icons.payments_outlined, 'Финальная стоимость', '\$${widget.application.finalPrice}'),
+              _buildInfoRow(Icons.payments_outlined, 'Финальная стоимость', '\$${_application.finalPrice}'),
               _buildInfoRow(Icons.person_outline, 'Менеджер', 'Назначение в процессе'),
             ],
           ),
           
           const SizedBox(height: 24),
+
+          // Show documents ASAP
+          if (_isAppLoading)
+            const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 2)))
+          else ...[
+            _buildContractSection(),
+            const SizedBox(height: 24),
+            _buildVideoSection(),
+            const SizedBox(height: 24),
+          ],
           
-          if (_car != null) ...[
+          if (_isCarLoading)
+            _buildLoadingCard('Характеристики авто')
+          else if (_car != null) ...[
             _buildCarDetails(),
             const SizedBox(height: 24),
           ],
           
-          _buildContractSection(),
-          
-          const SizedBox(height: 24),
-          
-          _buildVideoSection(),
+          _buildStaticServiceInfo(),
           
           const SizedBox(height: 24),
         ],
       ),
+    );
+  }
+
+  Widget _buildLoadingCard(String title) {
+    return _buildInfoCard(
+      title,
+      [
+        const Center(
+          child: Padding(
+            padding: EdgeInsets.all(20),
+            child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 2),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStaticServiceInfo() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Что входит в услугу', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 16),
+        _buildServiceItem('Полное юридическое сопровождение'),
+        _buildServiceItem('Доставка до вашего города'),
+        _buildServiceItem('Страхование груза'),
+        _buildServiceItem('Помощь в оформлении документов'),
+        _buildServiceItem('Гарантия возврата при несоответствии'),
+        const SizedBox(height: 32),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1A1A1A),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: const [
+              Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 20),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Все автомобили проходят тщательную проверку перед покупкой на аукционе.',
+                  style: TextStyle(color: AppColors.grey, fontSize: 13),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -313,7 +424,99 @@ class _ApplicationDetailScreenState extends State<ApplicationDetailScreen> {
     );
   }
 
+  // Helper: Download file with Dialog
+  Future<File?> _downloadFileWithProgress(String url, String filename) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        backgroundColor: AppColors.darkGrey,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircularProgressIndicator(color: AppColors.primary),
+              const SizedBox(height: 16),
+              Text(
+                'Загрузка ${filename}...',
+                style: const TextStyle(color: Colors.white, fontSize: 16),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('access_token');
+      final headers = token != null ? {'Authorization': 'Bearer $token'} : <String, String>{};
+
+      final response = await http.get(Uri.parse(url), headers: headers);
+      
+      // Close dialog
+      if (mounted) Navigator.of(context).pop();
+
+      if (response.statusCode != 200) {
+        throw 'Ошибка сервера: ${response.statusCode}';
+      }
+
+      final bytes = response.bodyBytes;
+      final tempDir = await getTemporaryDirectory();
+      final path = '${tempDir.path}/${filename}';
+      final file = File(path);
+      await file.writeAsBytes(bytes);
+      
+      return file;
+    } catch (e) {
+      // Close dialog if error
+      if (mounted && Navigator.canPop(context)) Navigator.of(context).pop();
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка: $e')),
+        );
+      }
+      return null;
+    }
+  }
+
+  // 1. Download & Share
+  Future<void> _downloadDocument(DocumentModel doc) async {
+    final file = await _downloadFileWithProgress(doc.downloadUrl, doc.filename);
+    if (file != null && mounted) {
+      await Share.shareXFiles([XFile(file.path)], text: 'Скачать ${doc.filename}');
+    }
+  }
+
+  // 2. Preview Video (Download first, then play local file)
+  Future<void> _previewVideo(DocumentModel doc) async {
+    // We download video first to avoid streaming issues with auth/headers on iOS
+    final file = await _downloadFileWithProgress(doc.downloadUrl, doc.filename);
+    
+    if (file != null && mounted) {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => VideoPlayerScreen(
+            url: file.path,  // Pass LOCAL path
+            filename: doc.filename,
+            // Header is not needed for local file
+          ),
+        ),
+      );
+    }
+  }
+
   Widget _buildContractSection() {
+    final contract = _application.documents
+        .where((d) => d.type.toLowerCase() == 'contract')
+        .firstOrNull;
+    
+    if (contract == null) return const SizedBox.shrink();
+
     return _buildInfoCard(
       'Документы',
       [
@@ -330,19 +533,17 @@ class _ApplicationDetailScreenState extends State<ApplicationDetailScreen> {
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    Text('Договор купли-продажи', style: TextStyle(fontWeight: FontWeight.bold)),
-                    Text('PDF • 2.4 MB', style: TextStyle(color: AppColors.grey, fontSize: 12)),
+                  children: [
+                    Text(contract.filename, style: const TextStyle(fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    Text('PDF • ${contract.fileSize.isNotEmpty ? contract.fileSize : "Документ"}', style: const TextStyle(color: AppColors.grey, fontSize: 12)),
                   ],
                 ),
               ),
+              // Download Button for Contract
               IconButton(
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Загрузка договора начнется через мгновение')),
-                  );
-                },
+                onPressed: () => _downloadDocument(contract),
                 icon: const Icon(Icons.download_rounded, color: AppColors.primary),
+                tooltip: 'Скачать',
               ),
             ],
           ),
@@ -352,36 +553,71 @@ class _ApplicationDetailScreenState extends State<ApplicationDetailScreen> {
   }
 
   Widget _buildVideoSection() {
-    return _buildInfoCard(
-      'Видео осмотра',
-      [
-        Container(
-          width: double.infinity,
-          height: 200,
-          decoration: BoxDecoration(
-            color: AppColors.darkGrey,
-            borderRadius: BorderRadius.circular(20),
-            image: const DecorationImage(
-              image: NetworkImage('https://img.youtube.com/vi/placeholder/0.jpg'),
-              fit: BoxFit.cover,
-              opacity: 0.5,
+    final video = _application.documents
+        .where((d) {
+          final type = d.type.toLowerCase();
+          return type == 'video_signature' || type == 'video_report';
+        })
+        .firstOrNull;
+    
+    if (video == null) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Видео осмотра',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 16),
+        // Preview Area (Click to Play)
+        GestureDetector(
+          onTap: () => _previewVideo(video),
+          child: Container(
+            height: 180,
+            decoration: BoxDecoration(
+              color: Colors.black12,
+              borderRadius: BorderRadius.circular(16),
+              image: _application.carImageUrl != null
+                ? DecorationImage(
+                    image: NetworkImage(UrlUtil.sanitize(_application.carImageUrl!)),
+                    fit: BoxFit.cover,
+                    opacity: 0.3,
+                  )
+                : null,
             ),
-          ),
-          child: Center(
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.8),
-                shape: BoxShape.circle,
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.8),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 32),
               ),
-              child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 32),
             ),
           ),
         ),
         const SizedBox(height: 12),
-        const Text(
-          'Видео-отчет процесса осмотра и погрузки автомобиля',
-          style: TextStyle(color: AppColors.grey, fontSize: 13),
+        // Info Row with Download Button
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Видео-отчет: ${video.filename}',
+                style: const TextStyle(color: AppColors.grey, fontSize: 13),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            IconButton(
+              onPressed: () => _downloadDocument(video),
+              icon: const Icon(Icons.download_rounded, color: AppColors.grey),
+              tooltip: 'Скачать видео',
+              constraints: const BoxConstraints(),
+              padding: const EdgeInsets.all(8),
+            ),
+          ],
         ),
       ],
     );
@@ -437,5 +673,18 @@ class _ApplicationDetailScreenState extends State<ApplicationDetailScreen> {
       case 'CANCELLED': return {'label': 'Отменена', 'color': Colors.red};
       default: return {'label': status, 'color': AppColors.grey};
     }
+  }
+
+  Widget _buildServiceItem(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        children: [
+          const Icon(Icons.check_rounded, color: Colors.green, size: 18),
+          const SizedBox(width: 12),
+          Expanded(child: Text(text, style: const TextStyle(color: Colors.white70, fontSize: 14))),
+        ],
+      ),
+    );
   }
 }

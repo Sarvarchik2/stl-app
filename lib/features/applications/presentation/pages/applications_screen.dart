@@ -45,38 +45,105 @@ class _ApplicationsScreenState extends State<ApplicationsScreen> {
     }
   }
 
+  Future<void> _logout() async {
+    await _authRepository.logout();
+    if (mounted) {
+      Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: _loadData,
           color: AppColors.primary,
-          child: SingleChildScrollView(
+          child: CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 120),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildHeader(),
-                const SizedBox(height: 32),
-                Text(AppStrings.get('my_applications'), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                const Text('Отслеживайте статус в реальном времени', style: TextStyle(color: AppColors.grey)),
-                const SizedBox(height: 24),
-                if (_isLoading)
-                  const ExcludeSemantics(
-                    key: ValueKey('applications_loading'),
-                    child: Center(child: Padding(padding: EdgeInsets.all(40.0), child: CircularProgressIndicator(color: AppColors.primary))),
-                  )
-                else if (_error != null)
-                  Center(key: const ValueKey('applications_error'), child: Text('Ошибка: $_error', style: const TextStyle(color: Colors.red)))
-                else if (_applications.isEmpty)
-                  _buildEmptyState()
-                else
-                  Column(key: const ValueKey('applications_list'), children: _applications.map((app) => Padding(padding: const EdgeInsets.only(bottom: 16), child: _buildApplicationItem(app))).toList()),
-              ],
-            ),
+            slivers: [
+              SliverPadding(
+                padding: const EdgeInsets.all(20),
+                sliver: SliverToBoxAdapter(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildHeader(),
+                      const SizedBox(height: 32),
+                      Text(AppStrings.get('my_applications'), style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      const Text('Отслеживайте статус в реальном времени', style: TextStyle(color: AppColors.grey)),
+                    ],
+                  ),
+                ),
+              ),
+              if (_isLoading)
+                const SliverFillRemaining(
+                  child: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+                )
+              else if (_error != null)
+                SliverFillRemaining(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 32),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(24),
+                          decoration: BoxDecoration(color: Colors.red.withOpacity(0.1), shape: BoxShape.circle),
+                          child: const Icon(Icons.lock_person_outlined, size: 48, color: Colors.red),
+                        ),
+                        const SizedBox(height: 24),
+                        const Text('Доступ ограничен', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 12),
+                        Text(
+                          _error!.contains('403') 
+                            ? 'У вас нет разрешения на просмотр этого раздела или сессия устарела.' 
+                            : 'Произошла ошибка при загрузке данных.',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: AppColors.grey),
+                        ),
+                        const SizedBox(height: 32),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            TextButton.icon(
+                              onPressed: _loadData,
+                              icon: const Icon(Icons.refresh, color: AppColors.primary),
+                              label: const Text('Повторить', style: TextStyle(color: AppColors.primary)),
+                            ),
+                            const SizedBox(width: 20),
+                            TextButton.icon(
+                              onPressed: _logout,
+                              icon: const Icon(Icons.logout, color: Colors.white70),
+                              label: const Text('Выйти', style: TextStyle(color: Colors.white70)),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else if (_applications.isEmpty)
+                SliverFillRemaining(
+                  child: _buildEmptyState(),
+                )
+              else
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) => Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: _buildApplicationItem(_applications[index]),
+                      ),
+                      childCount: _applications.length,
+                    ),
+                  ),
+                ),
+              const SliverPadding(padding: EdgeInsets.only(bottom: 100)),
+            ],
           ),
         ),
       ),
@@ -86,10 +153,55 @@ class _ApplicationsScreenState extends State<ApplicationsScreen> {
   Widget _buildHeader() {
     return Row(
       children: [
-        Container(width: 50, height: 50, decoration: const BoxDecoration(color: AppColors.primary, shape: BoxShape.circle), child: const Icon(Icons.person, color: Colors.white)),
-        const SizedBox(width: 12),
-        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(_user?.fullName ?? 'STL LOGISTICS', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)), Text(_user?.phone ?? '', style: const TextStyle(color: AppColors.grey, fontSize: 14))]),
-        const Spacer(),
+        Container(
+          width: 50,
+          height: 50,
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [AppColors.primary, Color(0xFFFF8C00)],
+            ),
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(color: AppColors.primary.withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 4)),
+            ],
+          ),
+          child: const Icon(Icons.person_rounded, color: Colors.white, size: 28),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _user?.fullName ?? 'Клиент',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              Text(
+                _user?.phone ?? '',
+                style: const TextStyle(color: AppColors.grey, fontSize: 13),
+              ),
+            ],
+          ),
+        ),
+        IconButton(
+          onPressed: () {
+            showDialog(
+              context: context,
+              builder: (context) => AlertDialog(
+                backgroundColor: AppColors.surface,
+                title: const Text('Выход'),
+                content: const Text('Вы уверены, что хотите выйти из аккаунта?'),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена', style: TextStyle(color: AppColors.grey))),
+                  TextButton(onPressed: _logout, child: const Text('Выйти', style: TextStyle(color: Colors.red))),
+                ],
+              ),
+            );
+          },
+          icon: const Icon(Icons.logout_rounded, color: AppColors.grey),
+        ),
       ],
     );
   }
