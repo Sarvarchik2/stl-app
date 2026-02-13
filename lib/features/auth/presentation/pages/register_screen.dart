@@ -49,17 +49,30 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     setState(() => _isLoading = true);
     try {
-      await _authRepository.register(phone, firstName, lastName, password);
+      final response = await _authRepository.register(
+        phone: phone,
+        password: password,
+        firstName: firstName,
+        lastName: lastName,
+      );
+      
       if (!mounted) return;
       
       TopNotification.show(
         context,
-        message: 'Регистрация успешна!',
+        message: response['message'] ?? 'Код отправлен!',
       );
       
       Navigator.push(
         context,
-        MaterialPageRoute(builder: (context) => OtpScreen(phone: phone)),
+        MaterialPageRoute(
+          builder: (context) => OtpScreen(
+            phone: phone,
+            password: password,
+            firstName: firstName,
+            lastName: lastName,
+          ),
+        ),
       );
     } catch (e) {
       if (!mounted) return;

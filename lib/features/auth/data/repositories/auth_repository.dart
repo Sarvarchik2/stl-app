@@ -9,6 +9,40 @@ class AuthRepository {
 
   AuthRepository(this._apiClient, this._prefs);
 
+  Future<Map<String, dynamic>> register({
+    required String phone,
+    required String password,
+    required String firstName,
+    required String lastName,
+    String? email,
+    String? code,
+  }) async {
+    final response = await _apiClient.post(
+      ApiEndpoints.register,
+      data: {
+        'phone': phone,
+        'password': password,
+        'first_name': firstName,
+        'last_name': lastName,
+        if (email != null) 'email': email,
+        if (code != null) 'code': code,
+      },
+    );
+
+    if (response.statusCode == 200) {
+      if (code != null) {
+        // Step 2: Completed
+        final token = response.data['tokens']['access_token'];
+        final refreshToken = response.data['tokens']['refresh_token'];
+        await _prefs.setString('access_token', token);
+        await _prefs.setString('refresh_token', refreshToken);
+      }
+      return response.data;
+    } else {
+      throw Exception(response.data['detail'] ?? 'Registration failed');
+    }
+  }
+
   Future<void> login(String phone, String password) async {
     final response = await _apiClient.post(
       ApiEndpoints.login,
@@ -25,44 +59,6 @@ class AuthRepository {
       await _prefs.setString('refresh_token', refreshToken);
     } else {
       throw Exception('Login failed');
-    }
-  }
-
-  Future<void> register(String phone, String firstName, String lastName, String password) async {
-    await _apiClient.post(
-      ApiEndpoints.register,
-      data: {
-        'phone': phone,
-        'first_name': firstName,
-        'last_name': lastName,
-        'password': password,
-      },
-    );
-  }
-
-  Future<void> sendOtp(String phone) async {
-    await _apiClient.post(
-      ApiEndpoints.sendOtp,
-      data: {'phone': phone},
-    );
-  }
-
-  Future<void> verifyOtp(String phone, String code) async {
-    final response = await _apiClient.post(
-      ApiEndpoints.verifyOtp,
-      data: {
-        'phone': phone,
-        'code': code,
-      },
-    );
-
-    if (response.statusCode == 200) {
-      final token = response.data['access_token'];
-      final refreshToken = response.data['refresh_token'];
-      await _prefs.setString('access_token', token);
-      await _prefs.setString('refresh_token', refreshToken);
-    } else {
-      throw Exception('OTP verification failed');
     }
   }
 

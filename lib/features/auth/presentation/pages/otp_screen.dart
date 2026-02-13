@@ -8,15 +8,25 @@ import 'package:stl_app/core/widgets/top_notification.dart';
 
 class OtpScreen extends StatefulWidget {
   final String phone;
-  const OtpScreen({super.key, required this.phone});
+  final String password;
+  final String firstName;
+  final String lastName;
+
+  const OtpScreen({
+    super.key,
+    required this.phone,
+    required this.password,
+    required this.firstName,
+    required this.lastName,
+  });
 
   @override
   State<OtpScreen> createState() => _OtpScreenState();
 }
 
 class _OtpScreenState extends State<OtpScreen> {
-  final List<TextEditingController> _controllers = List.generate(4, (_) => TextEditingController());
-  final List<FocusNode> _focusNodes = List.generate(4, (_) => FocusNode());
+  final List<TextEditingController> _controllers = List.generate(6, (_) => TextEditingController());
+  final List<FocusNode> _focusNodes = List.generate(6, (_) => FocusNode());
   final AuthRepository _authRepository = sl<AuthRepository>();
   bool _isLoading = false;
 
@@ -33,11 +43,17 @@ class _OtpScreenState extends State<OtpScreen> {
 
   Future<void> _handleVerify() async {
     final code = _controllers.map((c) => c.text).join();
-    if (code.length < 4) return;
+    if (code.length < 6) return;
 
     setState(() => _isLoading = true);
     try {
-      await _authRepository.verifyOtp(widget.phone, code);
+      await _authRepository.register(
+        phone: widget.phone,
+        password: widget.password,
+        firstName: widget.firstName,
+        lastName: widget.lastName,
+        code: code,
+      );
       if (!mounted) return;
       Navigator.pushAndRemoveUntil(
         context,
@@ -115,13 +131,13 @@ class _OtpScreenState extends State<OtpScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: List.generate(
-                  4,
+                  6,
                   (index) => Container(
-                    width: 64,
-                    height: 80,
+                    width: 48,
+                    height: 64,
                     decoration: BoxDecoration(
                       color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(15),
                     ),
                     child: Center(
                       child: TextField(
@@ -129,10 +145,10 @@ class _OtpScreenState extends State<OtpScreen> {
                         focusNode: _focusNodes[index],
                         textAlign: TextAlign.center,
                         keyboardType: TextInputType.number,
-                        style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                         maxLength: 1,
                         onChanged: (value) {
-                          if (value.isNotEmpty && index < 3) {
+                          if (value.isNotEmpty && index < 5) {
                             _focusNodes[index + 1].requestFocus();
                           } else if (value.isEmpty && index > 0) {
                             _focusNodes[index - 1].requestFocus();
