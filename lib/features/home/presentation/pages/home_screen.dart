@@ -4,6 +4,7 @@ import 'package:stl_app/core/di/service_locator.dart';
 import 'package:stl_app/features/catalog/data/models/car_model.dart';
 import 'package:stl_app/features/catalog/data/repositories/catalog_repository.dart';
 import 'package:stl_app/features/catalog/presentation/pages/car_detail_screen.dart';
+import 'package:stl_app/features/catalog/data/repositories/favorites_repository.dart';
 import 'package:stl_app/features/auth/data/models/user_model.dart';
 import 'package:stl_app/features/auth/data/repositories/auth_repository.dart';
 import 'package:stl_app/core/localization/app_strings.dart';
@@ -25,6 +26,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final CatalogRepository _catalogRepository = sl<CatalogRepository>();
   final AuthRepository _authRepository = sl<AuthRepository>();
   final StoryRepository _storyRepository = sl<StoryRepository>();
+  final FavoritesRepository _favoritesRepository = sl<FavoritesRepository>();
   
   List<CarModel> _popularCars = [];
   List<StoryModel> _stories = [];
@@ -448,8 +450,23 @@ class _HomeScreenState extends State<HomeScreen> {
                   Text('${car.brand} ${car.model}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                   const SizedBox(height: 4),
                   Text('${car.year} • ${car.engine ?? ""}', style: const TextStyle(color: AppColors.grey, fontSize: 13)),
-                  const SizedBox(height: 8),
-                  Text('\$${car.finalPriceUsd}', style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 18)),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('\$${car.finalPriceUsd}', style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 16)),
+                      GestureDetector(
+                        onTap: () {
+                          _favoritesRepository.toggleFavorite(car);
+                          setState(() {});
+                        },
+                        child: Icon(
+                          _favoritesRepository.isFavorite(car.id) ? Icons.favorite : Icons.favorite_border,
+                          color: _favoritesRepository.isFavorite(car.id) ? AppColors.primary : AppColors.grey,
+                          size: 20,
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),

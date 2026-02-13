@@ -4,6 +4,7 @@ import '../../../home/presentation/pages/home_screen.dart';
 import '../../../catalog/presentation/pages/catalog_screen.dart';
 import '../../../applications/presentation/pages/applications_screen.dart';
 import '../../../profile/presentation/pages/profile_screen.dart';
+import '../../../catalog/presentation/pages/favorites_screen.dart';
 
 class MainNavScreen extends StatefulWidget {
   const MainNavScreen({super.key});
@@ -18,6 +19,7 @@ class _MainNavScreenState extends State<MainNavScreen> {
   final List<Widget> _pages = [
     const HomeScreen(),
     const CatalogScreen(),
+    const FavoritesScreen(),
     const ApplicationsScreen(),
     const ProfileScreen(),
   ];
@@ -54,8 +56,9 @@ class _MainNavScreenState extends State<MainNavScreen> {
                   children: [
                     _buildNavItem(0, Icons.home_rounded),
                     _buildNavItem(1, Icons.search_rounded),
-                    _buildNavItem(2, Icons.description_rounded),
-                    _buildNavItem(3, Icons.person_rounded),
+                    _buildNavItem(2, Icons.favorite_rounded),
+                    _buildNavItem(3, Icons.description_rounded),
+                    _buildNavItem(4, Icons.person_rounded),
                   ],
                 ),
               ),

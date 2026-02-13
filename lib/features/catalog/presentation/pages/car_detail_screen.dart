@@ -6,6 +6,7 @@ import 'package:stl_app/core/app_colors.dart';
 import 'package:stl_app/features/catalog/data/models/car_model.dart';
 import 'package:stl_app/core/widgets/top_notification.dart';
 import 'package:stl_app/core/utils/url_util.dart';
+import 'package:stl_app/features/catalog/data/repositories/favorites_repository.dart';
 
 class CarDetailScreen extends StatefulWidget {
   final CarModel car;
@@ -23,6 +24,7 @@ class CarDetailScreen extends StatefulWidget {
 
 class _CarDetailScreenState extends State<CarDetailScreen> {
   final PageController _pageController = PageController();
+  final FavoritesRepository _favoritesRepository = sl<FavoritesRepository>();
   int _currentPage = 0;
 
   Future<void> _submitApplication(BuildContext context) async {
@@ -331,6 +333,30 @@ class _CarDetailScreenState extends State<CarDetailScreen> {
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 24),
+              ),
+            ),
+          ),
+          
+          // Favorite Button
+          Positioned(
+            top: 50,
+            right: 20,
+            child: GestureDetector(
+              onTap: () {
+                _favoritesRepository.toggleFavorite(widget.car);
+                setState(() {});
+              },
+              child: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.5),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  _favoritesRepository.isFavorite(widget.car.id) ? Icons.favorite : Icons.favorite_border, 
+                  color: _favoritesRepository.isFavorite(widget.car.id) ? AppColors.primary : Colors.white, 
+                  size: 24
+                ),
               ),
             ),
           ),

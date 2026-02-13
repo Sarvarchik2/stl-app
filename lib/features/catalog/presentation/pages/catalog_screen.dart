@@ -7,6 +7,7 @@ import 'package:stl_app/features/auth/data/models/user_model.dart';
 import 'package:stl_app/features/auth/data/repositories/auth_repository.dart';
 import 'package:stl_app/core/localization/app_strings.dart';
 import 'package:stl_app/core/utils/url_util.dart';
+import 'package:stl_app/features/catalog/data/repositories/favorites_repository.dart';
 import 'car_detail_screen.dart';
 
 class CatalogScreen extends StatefulWidget {
@@ -21,6 +22,7 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
   final FocusNode _searchFocusNode = FocusNode();
   final CatalogRepository _catalogRepository = sl<CatalogRepository>();
   final AuthRepository _authRepository = sl<AuthRepository>();
+  final FavoritesRepository _favoritesRepository = sl<FavoritesRepository>();
   
   List<CarModel> _cars = [];
   List<CarModel> _filteredCars = [];
@@ -504,10 +506,13 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
 
   Widget _buildCarCard(CarModel car) {
     return GestureDetector(
-      onTap: () => Navigator.push(
-        context, 
-        MaterialPageRoute(builder: (context) => CarDetailScreen(car: car, heroTag: 'car_${car.id}')),
-      ),
+      onTap: () async {
+        await Navigator.push(
+          context, 
+          MaterialPageRoute(builder: (context) => CarDetailScreen(car: car, heroTag: 'car_${car.id}')),
+        );
+        setState(() {}); // Refresh favorite icons state when back
+      },
       child: Container(
         margin: const EdgeInsets.only(bottom: 20),
         decoration: BoxDecoration(
@@ -563,13 +568,23 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
                 Positioned(
                   top: 16,
                   right: 16,
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.5),
-                      shape: BoxShape.circle,
+                  child: GestureDetector(
+                    onTap: () {
+                      _favoritesRepository.toggleFavorite(car);
+                      setState(() {});
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.5),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        _favoritesRepository.isFavorite(car.id) ? Icons.favorite : Icons.favorite_border, 
+                        color: _favoritesRepository.isFavorite(car.id) ? AppColors.primary : Colors.white, 
+                        size: 20
+                      ),
                     ),
-                    child: const Icon(Icons.favorite_border, color: Colors.white, size: 20),
                   ),
                 ),
               ],

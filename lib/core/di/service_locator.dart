@@ -5,6 +5,7 @@ import '../../features/auth/data/repositories/auth_repository.dart';
 import '../../features/catalog/data/repositories/catalog_repository.dart';
 import '../../features/applications/data/repositories/application_repository.dart';
 import '../../features/home/data/repositories/story_repository.dart';
+import '../../features/catalog/data/repositories/favorites_repository.dart';
 
 final sl = GetIt.instance;
 
@@ -21,4 +22,5 @@ Future<void> init() async {
   sl.registerLazySingleton<CatalogRepository>(() => CatalogRepository(sl()));
   sl.registerLazySingleton<ApplicationRepository>(() => ApplicationRepository(sl()));
   sl.registerLazySingleton<StoryRepository>(() => StoryRepository(sl<ApiClient>()));
+  sl.registerLazySingleton<FavoritesRepository>(() => FavoritesRepository(sl()));
 }

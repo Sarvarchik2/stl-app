@@ -61,6 +61,28 @@ class CarModel extends Equatable {
     );
   }
 
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'brand': brand,
+      'make': make,
+      'model': model,
+      'year': year,
+      'trim': trim,
+      'body_type': bodyType,
+      'fuel_type': fuelType,
+      'mileage': mileage,
+      'engine': engine,
+      'transmission': transmission,
+      'drivetrain': drivetrain,
+      'source_price_usd': sourcePriceUsd,
+      'final_price_usd': finalPriceUsd,
+      'image_url': imageUrl,
+      'photos': photos,
+      'features': features,
+    };
+  }
+
   @override
   List<Object?> get props => [id, brand, make, model, year];
 }
