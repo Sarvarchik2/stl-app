@@ -53,10 +53,23 @@ class AuthRepository {
     );
 
     if (response.statusCode == 200) {
-      final token = response.data['access_token'];
-      final refreshToken = response.data['refresh_token'];
-      await _prefs.setString('access_token', token);
-      await _prefs.setString('refresh_token', refreshToken);
+      String? token;
+      String? refreshToken;
+
+      if (response.data['tokens'] != null) {
+        token = response.data['tokens']['access_token'];
+        refreshToken = response.data['tokens']['refresh_token'];
+      } else {
+        token = response.data['access_token'];
+        refreshToken = response.data['refresh_token'];
+      }
+
+      if (token != null) {
+        await _prefs.setString('access_token', token);
+      }
+      if (refreshToken != null) {
+        await _prefs.setString('refresh_token', refreshToken);
+      }
     } else {
       throw Exception('Login failed');
     }

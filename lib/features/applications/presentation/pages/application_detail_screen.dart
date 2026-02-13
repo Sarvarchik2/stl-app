@@ -41,7 +41,11 @@ class _ApplicationDetailScreenState extends State<ApplicationDetailScreen> {
 
   Future<void> _makeCall() async {
     try {
-      final Uri telUri = Uri.parse('tel:+998900000000');
+      String rawPhone = _application.managerPhone ?? '998900000000';
+      // Remove everything except digits
+      final digitsOnly = rawPhone.replaceAll(RegExp(r'\D'), '');
+      final phone = '+$digitsOnly';
+      final Uri telUri = Uri.parse('tel:$phone');
       debugPrint('Calling: $telUri');
       if (!await launchUrl(telUri)) {
         throw 'Could not launch call';
@@ -213,12 +217,18 @@ class _ApplicationDetailScreenState extends State<ApplicationDetailScreen> {
           ),
           const SizedBox(height: 32),
           
-          _buildInfoCard(
+            _buildInfoCard(
             'Информация о заявке',
             [
               _buildInfoRow(Icons.calendar_today_outlined, 'Дата создания', dateStr),
-              _buildInfoRow(Icons.payments_outlined, 'Финальная стоимость', '\$${_application.finalPrice}'),
-              _buildInfoRow(Icons.person_outline, 'Менеджер', 'Назначение в процессе'),
+              _buildInfoRow(Icons.payments_outlined, 'Финальная стоимость', '\$${_application.finalPrice.toStringAsFixed(0)}'),
+              _buildInfoRow(
+                Icons.person_outline, 
+                'Менеджер', 
+                _application.managerFirstName != null 
+                  ? '${_application.managerFirstName} ${_application.managerLastName ?? ""}' 
+                  : 'Назначение в процессе'
+              ),
             ],
           ),
           
@@ -664,14 +674,25 @@ class _ApplicationDetailScreenState extends State<ApplicationDetailScreen> {
   }
 
   Map<String, dynamic> _getStatusData(String status) {
-    switch (status.toUpperCase()) {
-      case 'NEW': return {'label': 'Новая', 'color': Colors.blue};
-      case 'CONFIRMED': return {'label': 'Подтверждена', 'color': Colors.orange};
-      case 'PAID': return {'label': 'Оплачена', 'color': Colors.green};
-      case 'SHIPPING': return {'label': 'В пути', 'color': Colors.purple};
-      case 'COMPLETED': return {'label': 'Завершена', 'color': Colors.teal};
-      case 'CANCELLED': return {'label': 'Отменена', 'color': Colors.red};
-      default: return {'label': status, 'color': AppColors.grey};
+    switch (status.toLowerCase()) {
+      case 'new':
+        return {'label': 'Новая', 'color': Colors.blue};
+      case 'confirmed':
+        return {'label': 'Подтверждена', 'color': Colors.orange};
+      case 'contract_signed':
+        return {'label': 'Договор подписан', 'color': Colors.indigo};
+      case 'paid':
+        return {'label': 'Оплачена', 'color': Colors.green};
+      case 'delivered':
+        return {'label': 'Доставлена', 'color': Colors.teal};
+      case 'shipping':
+        return {'label': 'В пути', 'color': Colors.purple};
+      case 'completed':
+        return {'label': 'Завершена', 'color': Colors.teal};
+      case 'cancelled':
+        return {'label': 'Отменена', 'color': Colors.red};
+      default:
+        return {'label': status, 'color': AppColors.grey};
     }
   }
 

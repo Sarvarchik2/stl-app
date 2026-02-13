@@ -276,7 +276,7 @@ class _ApplicationsScreenState extends State<ApplicationsScreen> {
               ],
             ),
             const SizedBox(height: 20),
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text('Создано: $dateStr', style: const TextStyle(color: AppColors.grey, fontSize: 12)), Text('${app.finalPrice} \$', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.primary))]),
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text('Создано: $dateStr', style: const TextStyle(color: AppColors.grey, fontSize: 12)), Text('${app.finalPrice.toStringAsFixed(0)} \$', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.primary))]),
           ],
         ),
       ),
@@ -289,14 +289,25 @@ class _ApplicationsScreenState extends State<ApplicationsScreen> {
   }
 
   Map<String, dynamic> _getStatusData(String status) {
-    switch (status.toUpperCase()) {
-      case 'NEW': return {'label': 'Новая', 'color': Colors.blue};
-      case 'CONFIRMED': return {'label': 'Подтверждена', 'color': Colors.orange};
-      case 'PAID': return {'label': 'Оплачена', 'color': Colors.green};
-      case 'SHIPPING': return {'label': 'В пути', 'color': Colors.purple};
-      case 'COMPLETED': return {'label': 'Завершена', 'color': Colors.teal};
-      case 'CANCELLED': return {'label': 'Отменена', 'color': Colors.red};
-      default: return {'label': status, 'color': AppColors.grey};
+    switch (status.toLowerCase()) {
+      case 'new':
+        return {'label': 'Новая', 'color': Colors.blue};
+      case 'confirmed':
+        return {'label': 'Подтверждена', 'color': Colors.orange};
+      case 'contract_signed':
+        return {'label': 'Договор подписан', 'color': Colors.indigo};
+      case 'paid':
+        return {'label': 'Оплачена', 'color': Colors.green};
+      case 'delivered':
+        return {'label': 'Доставлена', 'color': Colors.teal};
+      case 'shipping':
+        return {'label': 'В пути', 'color': Colors.purple};
+      case 'completed':
+        return {'label': 'Завершена', 'color': Colors.teal};
+      case 'cancelled':
+        return {'label': 'Отменена', 'color': Colors.red};
+      default:
+        return {'label': status, 'color': AppColors.grey};
     }
   }
 }
