@@ -248,7 +248,6 @@ class _CarDetailScreenState extends State<CarDetailScreen> {
           
           const SizedBox(height: 32),
           
-          // Price Card
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
@@ -256,25 +255,13 @@ class _CarDetailScreenState extends State<CarDetailScreen> {
               borderRadius: BorderRadius.circular(24),
               border: Border.all(color: AppColors.primary.withOpacity(0.3)),
             ),
-            child: Column(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                if (widget.car.sourcePriceUsd != null)
-                  _buildPriceRow('Цена на аукционе', '${widget.car.sourcePriceUsd} \$', isOld: true),
-                const SizedBox(height: 12),
-                _buildPriceRow('Услуги и доставка', 'Включено', isDiscount: true),
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 16),
-                  child: Divider(color: Colors.white10),
-                ),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text('Полная цена:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                    Text(
-                      priceText,
-                      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
-                    ),
-                  ],
+                const Text('Полная цена:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                Text(
+                  priceText,
+                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
                 ),
               ],
             ),

@@ -531,7 +531,7 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
                 ClipRRect(
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
                   child: Image.network(
-                    car.photos.isNotEmpty ? UrlUtil.sanitize(car.photos[0]) : '',
+                    car.photos.isNotEmpty ? UrlUtil.sanitize(car.photos[0]) : (car.imageUrl != null ? UrlUtil.sanitize(car.imageUrl!) : ''),
                     height: 200,
                     width: double.infinity,
                     fit: BoxFit.cover,

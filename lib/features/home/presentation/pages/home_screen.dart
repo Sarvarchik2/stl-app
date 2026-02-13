@@ -432,9 +432,9 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             ClipRRect(
               borderRadius: BorderRadius.circular(16),
-              child: car.photos.isNotEmpty
+              child: car.photos.isNotEmpty || car.imageUrl != null
                   ? Image.network(
-                      UrlUtil.sanitize(car.photos[0]),
+                      UrlUtil.sanitize(car.photos.isNotEmpty ? car.photos[0] : car.imageUrl!),
                       width: 100, height: 100, fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) => Container(width: 100, height: 100, color: AppColors.darkGrey, child: const Icon(Icons.directions_car, color: AppColors.grey)),
                     )
