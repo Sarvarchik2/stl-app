@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:stl_app/core/app_colors.dart';
 import 'package:stl_app/core/di/service_locator.dart';
@@ -20,16 +21,22 @@ class CatalogScreen extends StatefulWidget {
 class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProviderStateMixin {
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
+  final ScrollController _scrollController = ScrollController();
   final CatalogRepository _catalogRepository = sl<CatalogRepository>();
   final AuthRepository _authRepository = sl<AuthRepository>();
   final FavoritesRepository _favoritesRepository = sl<FavoritesRepository>();
   
   List<CarModel> _cars = [];
-  List<CarModel> _filteredCars = [];
   UserModel? _user;
   bool _isLoading = true;
-  bool _isSearching = false;
+  bool _isLoadingMore = false;
+  bool _hasMore = true;
+  int _currentPage = 1;
+  int _totalCars = 0;
+  static const int _perPage = 20;
+  
   String? _error;
+  Timer? _debounce;
   
   // Filters
   String? _selectedBrand;
@@ -39,7 +46,7 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
 
-  final List<String> _brands = ['BMW', 'Mercedes', 'Audi', 'Toyota', 'Honda', 'BYD', 'Lexus', 'Porsche'];
+  final List<String> _brands = ['Chevrolet', 'Hyundai', 'KIA', 'BMW', 'Mercedes', 'Audi', 'Toyota', 'Honda', 'BYD', 'Lexus', 'Porsche', 'Tesla', 'Ford', 'GMC'];
   final List<String> _bodyTypes = ['Седан', 'Кроссовер', 'Хэтчбек', 'Универсал', 'Купе', 'Минивэн'];
 
   @override
@@ -50,21 +57,35 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
       duration: const Duration(milliseconds: 300),
     );
     _fadeAnimation = CurvedAnimation(parent: _animationController, curve: Curves.easeInOut);
-    _loadData();
+    _scrollController.addListener(_onScroll);
     _searchController.addListener(_onSearchChanged);
+    _loadData();
   }
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
     _searchFocusNode.dispose();
+    _scrollController.dispose();
     _animationController.dispose();
     super.dispose();
   }
 
+  void _onScroll() {
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
+      if (!_isLoadingMore && _hasMore && !_isLoading) {
+        _loadMoreCars();
+      }
+    }
+  }
+
   void _onSearchChanged() {
-    _filterCars();
+    if (_debounce?.isActive ?? false) _debounce!.cancel();
+    _debounce = Timer(const Duration(milliseconds: 500), () {
+      _loadCars(isRefresh: true);
+    });
   }
 
   Future<void> _loadData() async {
@@ -79,48 +100,60 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
     } catch (_) {}
   }
 
-  Future<void> _loadCars() async {
-    if (mounted) setState(() { _isLoading = true; _error = null; });
+  Future<void> _loadCars({bool isRefresh = true}) async {
+    if (!mounted) return;
+    
+    if (isRefresh) {
+      setState(() {
+        _isLoading = true;
+        _error = null;
+        _currentPage = 1;
+        _hasMore = true;
+      });
+    }
+
     try {
-      final cars = await _catalogRepository.getCars();
+      final response = await _catalogRepository.getCars(
+        search: _searchController.text.isNotEmpty ? _searchController.text : null,
+        make: _selectedBrand,
+        page: _currentPage,
+        perPage: _perPage,
+      );
+
+      final cars = response.items;
       if (mounted) {
-        setState(() { 
-          _cars = cars; 
-          _filteredCars = cars;
-          _isLoading = false; 
+        setState(() {
+          if (isRefresh) {
+            _cars = cars;
+          } else {
+            _cars.addAll(cars);
+          }
+          _totalCars = response.total;
+          _isLoading = false;
+          _isLoadingMore = false;
+          _hasMore = cars.length >= _perPage;
+          _currentPage++;
         });
       }
     } catch (e) {
-      if (mounted) setState(() { _error = e.toString(); _isLoading = false; });
+      if (mounted) {
+        setState(() {
+          _error = e.toString();
+          _isLoading = false;
+          _isLoadingMore = false;
+        });
+      }
     }
   }
 
+  Future<void> _loadMoreCars() async {
+    if (_isLoadingMore || !_hasMore) return;
+    setState(() => _isLoadingMore = true);
+    await _loadCars(isRefresh: false);
+  }
+
   void _filterCars() {
-    final query = _searchController.text.toLowerCase().trim();
-    
-    setState(() {
-      _filteredCars = _cars.where((car) {
-        // Search filter
-        final matchesSearch = query.isEmpty ||
-            car.brand.toLowerCase().contains(query) ||
-            car.model.toLowerCase().contains(query) ||
-            (car.engine?.toLowerCase().contains(query) ?? false);
-        
-        // Brand filter
-        final matchesBrand = _selectedBrand == null || 
-            car.brand.toLowerCase() == _selectedBrand!.toLowerCase();
-        
-        // Body type filter
-        final matchesBodyType = _selectedBodyType == null || 
-            (car.bodyType?.toLowerCase() == _selectedBodyType!.toLowerCase());
-        
-        // Price filter
-        final price = double.tryParse(car.finalPriceUsd ?? '0') ?? 0;
-        final matchesPrice = price >= _priceRange.start && price <= _priceRange.end;
-        
-        return matchesSearch && matchesBrand && matchesBodyType && matchesPrice;
-      }).toList();
-    });
+    _loadCars(isRefresh: true);
   }
 
   void _showFilterSheet() {
@@ -138,15 +171,21 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
       _selectedBodyType = null;
       _priceRange = const RangeValues(0, 100000);
       _searchController.clear();
-      _filteredCars = _cars;
     });
+    _loadCars(isRefresh: true);
   }
 
-  bool get _hasActiveFilters => 
-      _selectedBrand != null || 
-      _selectedBodyType != null || 
-      _priceRange.start > 0 || 
-      _priceRange.end < 100000;
+  bool get _hasActiveFilters {
+    return _selectedBrand != null || 
+        _selectedBodyType != null || 
+        _priceRange.start > 0 || 
+        _priceRange.end < 100000;
+  }
+
+  bool get _isSearchingOrFiltering => 
+      (_searchController.text.isNotEmpty) || 
+      (_selectedBrand != null) || 
+      (_selectedBodyType != null);
 
   @override
   Widget build(BuildContext context) {
@@ -174,7 +213,7 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
                       )
                     : _error != null
                         ? _buildErrorState()
-                        : _filteredCars.isEmpty
+                        : _cars.isEmpty
                             ? _buildEmptyState()
                             : _buildCarsList(),
               ),
@@ -214,7 +253,9 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '${_filteredCars.length} автомобилей',
+                    _isSearchingOrFiltering 
+                        ? 'Найдено $_totalCars автомобилей'
+                        : '$_totalCars автомобилей',
                     style: const TextStyle(color: AppColors.grey, fontSize: 14),
                   ),
                 ],
@@ -374,7 +415,7 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
                     _filterCars();
                   }),
                   const SizedBox(width: 8),
-                  ..._brands.take(5).map((brand) => Padding(
+                  ..._brands.map((brand) => Padding(
                     padding: const EdgeInsets.only(right: 8),
                     child: _buildQuickFilterChip(brand, _selectedBrand == brand, () {
                       setState(() => _selectedBrand = _selectedBrand == brand ? null : brand);
@@ -482,20 +523,31 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
   }
 
   Widget _buildCarsList() {
+    final itemCount = _cars.length + (_isLoadingMore ? 1 : 0);
     return ListView.builder(
+      controller: _scrollController,
       key: const PageStorageKey('catalog_list'),
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 120),
-      itemCount: _filteredCars.length,
+      itemCount: itemCount,
       itemBuilder: (context, index) {
-        final car = _filteredCars[index];
+        if (index == _cars.length) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 32),
+            child: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+          );
+        }
+        
+        final car = _cars[index];
         return TweenAnimationBuilder<double>(
           tween: Tween(begin: 0, end: 1),
-          duration: Duration(milliseconds: 300 + (index * 50)),
-          curve: Curves.easeOut,
+          duration: const Duration(milliseconds: 400),
           builder: (context, value, child) {
-            return Transform.translate(
-              offset: Offset(0, 20 * (1 - value)),
-              child: Opacity(opacity: value, child: child),
+            return Opacity(
+              opacity: value,
+              child: Transform.translate(
+                offset: Offset(0, 20 * (1 - value)),
+                child: child,
+              ),
             );
           },
           child: _buildCarCard(car),

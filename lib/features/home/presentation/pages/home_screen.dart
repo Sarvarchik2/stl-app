@@ -64,10 +64,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _loadPopularCars() async {
     try {
-      final cars = await _catalogRepository.getCars();
+      final response = await _catalogRepository.getCars();
       if (mounted) {
         setState(() {
-          _popularCars = cars.take(5).toList();
+          _popularCars = response.items.take(5).toList();
         });
       }
     } catch (e) {}

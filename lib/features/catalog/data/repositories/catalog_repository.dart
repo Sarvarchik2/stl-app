@@ -7,7 +7,7 @@ class CatalogRepository {
 
   CatalogRepository(this._apiClient);
 
-  Future<List<CarModel>> getCars({
+  Future<CarListResponse> getCars({
     String? search,
     String? make,
     String? model,
@@ -20,7 +20,7 @@ class CatalogRepository {
       'page': page,
       'per_page': perPage,
     };
-    if (search != null) queryParams['brand'] = search;
+    if (search != null) queryParams['search'] = search;
     if (make != null) queryParams['make'] = make;
     if (model != null) queryParams['model'] = model;
     if (yearFrom != null) queryParams['year_from'] = yearFrom;
@@ -32,8 +32,7 @@ class CatalogRepository {
     );
 
     if (response.statusCode == 200) {
-      final List<dynamic> data = response.data['items'];
-      return data.map((json) => CarModel.fromJson(json)).toList();
+      return CarListResponse.fromJson(response.data);
     } else {
       throw Exception('Failed to load cars');
     }

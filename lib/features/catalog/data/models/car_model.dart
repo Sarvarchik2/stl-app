@@ -86,3 +86,26 @@ class CarModel extends Equatable {
   @override
   List<Object?> get props => [id, brand, make, model, year];
 }
+
+class CarListResponse {
+  final List<CarModel> items;
+  final int total;
+  final int page;
+  final int perPage;
+
+  CarListResponse({
+    required this.items,
+    required this.total,
+    required this.page,
+    required this.perPage,
+  });
+
+  factory CarListResponse.fromJson(Map<String, dynamic> json) {
+    return CarListResponse(
+      items: (json['items'] as List).map((e) => CarModel.fromJson(e)).toList(),
+      total: json['total'] ?? 0,
+      page: json['page'] ?? 1,
+      perPage: json['per_page'] ?? 20,
+    );
+  }
+}
